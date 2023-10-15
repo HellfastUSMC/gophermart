@@ -12,6 +12,7 @@ type gmartController struct {
 	Logger       logger.CLogger
 	Config       *config.SysConfig
 	CurrentStats *storage.CurrentStats
+	DBConn       *storage.PGSQLConn
 	//MemStore serverstorage.MemStorekeeper
 }
 
@@ -28,4 +29,13 @@ func (c *gmartController) Route() *chi.Mux {
 		//router.Post("/update/{metricType}/{metricName}/{metricValue}", c.getMetrics)
 	})
 	return router
+}
+
+func NewGmartController(logger logger.CLogger, conf *config.SysConfig, stats *storage.CurrentStats, DBConn *storage.PGSQLConn) *gmartController {
+	return &gmartController{
+		Logger:       logger,
+		Config:       conf,
+		CurrentStats: stats,
+		DBConn:       DBConn,
+	}
 }

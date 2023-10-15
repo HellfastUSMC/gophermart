@@ -2,15 +2,13 @@ package main
 
 import (
 	"fmt"
+	"github.com/HellfastUSMC/gophermart/gophermart/internal/config"
+	"github.com/HellfastUSMC/gophermart/gophermart/internal/controllers"
 	"github.com/HellfastUSMC/gophermart/gophermart/internal/storage"
 	"github.com/go-chi/chi/v5"
 	"github.com/rs/zerolog"
 	"net/http"
 	"os"
-	"runtime"
-	"time"
-
-	"github.com/HellfastUSMC/gophermart/gophermart/internal/config"
 )
 
 func main() {
@@ -24,24 +22,28 @@ func main() {
 	//	log.Error().Err(err).Msg("dumper create error")
 	//}
 	currentStats := storage.NewCurrentStats()
-	controller := controllers.NewServerController(&log, conf, memStore)
-	tickDump := time.NewTicker(time.Duration(conf.StoreInterval) * time.Second)
-	if dumper != nil {
-		go func() {
-			defer runtime.Goexit()
-			for {
-				<-tickDump.C
-				if err := memStore.WriteDump(); err != nil {
-					log.Error().Err(err).Msg("dump write error")
-				}
-			}
-		}()
-		if conf.Recover {
-			if err := memStore.ReadDump(); err != nil {
-				log.Error().Err(err).Msg("dump read error")
-			}
-		}
+	dbConn, err := storage.NewConnectionPGSQL(conf.DBConnString, log)
+	if err != nil {
+		log.Error().Err(err).Msg("DB connection error")
 	}
+	controller := controllers.NewGmartController(&log, conf, currentStats)
+	//tickDump := time.NewTicker(time.Duration(conf.StoreInterval) * time.Second)
+	//if dumper != nil {
+	//	go func() {
+	//		defer runtime.Goexit()
+	//		for {
+	//			<-tickDump.C
+	//			if err := memStore.WriteDump(); err != nil {
+	//				log.Error().Err(err).Msg("dump write error")
+	//			}
+	//		}
+	//	}()
+	//	if conf.Recover {
+	//		if err := memStore.ReadDump(); err != nil {
+	//			log.Error().Err(err).Msg("dump read error")
+	//		}
+	//	}
+	//}
 	router := chi.NewRouter()
 	router.Mount("/", controller.Route())
 	log.Info().Msg(fmt.Sprintf(

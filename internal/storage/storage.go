@@ -45,7 +45,6 @@ type CurrentStats struct {
 }
 
 func NewCurrentStats() *CurrentStats {
-
 	return &CurrentStats{
 		LastUserID:   GetLastUserID(),
 		LastOrderID:  GetLastOrderID(),

@@ -12,6 +12,7 @@ type SysConfig struct {
 	CashbackAddr  string `env:"REMOTE_ADDR"`
 	DBConnString  string `env:"DBCONN_STRING"`
 	CheckInterval int64  `env:"CHECK_INTERVAL"`
+	HashKey       string `env:"HASH_KEY"`
 }
 
 func (c *SysConfig) ParseStartupFlags() error {
@@ -29,6 +30,12 @@ func (c *SysConfig) ParseStartupFlags() error {
 		"db",
 		"",
 		"DB connection string",
+	)
+	serverFlags.StringVar(
+		&c.DBConnString,
+		"hkey",
+		"",
+		"Hash key",
 	)
 	if err := serverFlags.Parse(os.Args[1:]); err != nil {
 		os.Exit(1)
