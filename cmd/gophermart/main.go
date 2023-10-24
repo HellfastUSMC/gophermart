@@ -2,13 +2,16 @@ package main
 
 import (
 	"fmt"
+	"net/http"
+	"os"
+	"runtime"
+	"time"
+
 	"github.com/HellfastUSMC/gophermart/gophermart/internal/config"
 	"github.com/HellfastUSMC/gophermart/gophermart/internal/controllers"
 	"github.com/HellfastUSMC/gophermart/gophermart/internal/storage"
 	"github.com/go-chi/chi/v5"
 	"github.com/rs/zerolog"
-	"net/http"
-	"os"
 )
 
 func main() {
@@ -17,44 +20,55 @@ func main() {
 	if err != nil {
 		log.Error().Err(err).Msg("config create error")
 	}
-	//dumper, err := connectors.GetDumper(&log, conf)
-	//if err != nil {
-	//	log.Error().Err(err).Msg("dumper create error")
-	//}
 	currentStats := storage.NewCurrentStats()
-	dbConn, err := storage.NewConnectionPGSQL(conf.DBConnString, log)
+	dbConn, err := storage.NewConnectionPGSQL(conf.DBConnString, &log)
 	if err != nil {
 		log.Error().Err(err).Msg("DB connection error")
+		return
 	}
-	controller := controllers.NewGmartController(&log, conf, currentStats)
-	//tickDump := time.NewTicker(time.Duration(conf.StoreInterval) * time.Second)
-	//if dumper != nil {
-	//	go func() {
-	//		defer runtime.Goexit()
-	//		for {
-	//			<-tickDump.C
-	//			if err := memStore.WriteDump(); err != nil {
-	//				log.Error().Err(err).Msg("dump write error")
-	//			}
-	//		}
-	//	}()
-	//	if conf.Recover {
-	//		if err := memStore.ReadDump(); err != nil {
-	//			log.Error().Err(err).Msg("dump read error")
-	//		}
-	//	}
-	//}
+	store := storage.NewStorage(dbConn, currentStats, &log)
+	controller := controllers.NewGmartController(&log, conf, store)
+	tickCheckStatus := time.NewTicker(time.Duration(conf.CheckInterval) * time.Second)
+	tickCheckTokens := time.NewTicker(1 * time.Hour)
+	tickCheckOrders := time.NewTicker(10 * time.Minute)
+	go func() {
+		defer runtime.Goexit()
+		for {
+			<-tickCheckTokens.C
+			controller.CheckTokens()
+		}
+	}()
+	go func() {
+		defer runtime.Goexit()
+		for {
+			<-tickCheckOrders.C
+			err := controller.CheckOrder()
+			if err != nil {
+				log.Error().Err(err).Msg("error in checking orders")
+			}
+		}
+	}()
+	go func() {
+		defer runtime.Goexit()
+		for {
+			<-tickCheckStatus.C
+			err := controller.RenewStatus()
+			if err != nil {
+				log.Error().Err(err).Msg("error in status renew")
+			}
+			log.Info().Msg("status renewed")
+		}
+	}()
 	router := chi.NewRouter()
 	router.Mount("/", controller.Route())
 	log.Info().Msg(fmt.Sprintf(
-		"Starting server at %s with store interval %ds, dump path %s, DB path %s and recover state is %v",
-		controller.Config.ServerAddress,
-		controller.Config.StoreInterval,
-		controller.Config.DumpPath,
-		controller.Config.DBPath,
-		controller.Config.Recover,
+		"Starting server at %s with check interval %ds, DB path %s and remote addr %s",
+		controller.Config.GmartAddr,
+		controller.Config.CheckInterval,
+		controller.Config.DBConnString,
+		controller.Config.CashbackAddr,
 	))
-	err = http.ListenAndServe(controller.Config.ServerAddress, controller.Route())
+	err = http.ListenAndServe(controller.Config.GmartAddr, controller.Route())
 	if err != nil {
 		log.Error().Err(err)
 	}
