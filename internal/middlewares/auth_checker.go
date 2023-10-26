@@ -5,7 +5,6 @@ import (
 	"net/http"
 	"strings"
 
-	"github.com/HellfastUSMC/gophermart/gophermart/internal/controllers"
 	"github.com/HellfastUSMC/gophermart/gophermart/internal/logger"
 	"github.com/HellfastUSMC/gophermart/gophermart/internal/storage"
 )
@@ -14,7 +13,7 @@ type CHRespWriter struct {
 	http.ResponseWriter
 }
 
-func CheckAuth(log logger.CLogger, controller *controllers.GmartController) func(h http.Handler) http.Handler {
+func CheckAuth(log logger.CLogger, pg *storage.PGSQLConn) func(h http.Handler) http.Handler {
 	return func(h http.Handler) http.Handler {
 		return http.HandlerFunc(func(res http.ResponseWriter, req *http.Request) {
 			credentials := req.Header.Get("Authorization")
@@ -25,7 +24,7 @@ func CheckAuth(log logger.CLogger, controller *controllers.GmartController) func
 					http.Error(res, "Cannot decode credentials", http.StatusInternalServerError)
 					return
 				}
-				exists, err := controller.CheckAuth(login, password)
+				exists, err := pg.CheckUserCreds(login, password)
 				if err != nil {
 					log.Error().Err(err).Msg("cannot check credentials")
 					http.Error(res, "Cannot check credentials", http.StatusInternalServerError)

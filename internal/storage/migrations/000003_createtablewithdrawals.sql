@@ -4,7 +4,7 @@ CREATE TABLE IF NOT EXISTS WITHDRAWALS (
             ORDER_ID BIGINT NOT NULL,
     		SUM double precision NOT NULL,
     		PLACED_AT text NOT NULL,
-            LOGIN varchar NOT NULL UNIQUE PRIMARY KEY
+            LOGIN varchar NOT NULL PRIMARY KEY
         );
 
 -- +goose Down

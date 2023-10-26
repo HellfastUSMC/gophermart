@@ -28,13 +28,13 @@ func (c *SysConfig) ParseStartupFlags() error {
 	serverFlags.StringVar(
 		&c.DBConnString,
 		"db",
-		"",
+		"postgres://postgres:postgres@localhost:5432/postgres?sslmode=disable",
 		"DB connection string",
 	)
 	serverFlags.StringVar(
-		&c.DBConnString,
+		&c.HashKey,
 		"hkey",
-		"",
+		"a01b02",
 		"Hash key",
 	)
 	if err := serverFlags.Parse(os.Args[1:]); err != nil {

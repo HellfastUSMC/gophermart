@@ -39,7 +39,7 @@ type UserCred struct {
 type Order struct {
 	ID      int64     `json:"number"`
 	Status  string    `json:"status"`
-	Accrual float64   `json:"accrual"`
+	Accrual float64   `json:"accrual.exe"`
 	Date    time.Time `json:"placed_at"`
 	Login   string    `json:"-"`
 }

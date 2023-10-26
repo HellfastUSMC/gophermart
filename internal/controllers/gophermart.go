@@ -27,7 +27,7 @@ type GmartController struct {
 
 func (c *GmartController) Route() *chi.Mux {
 	router := chi.NewRouter()
-	router.Use(middlewares.CheckAuth(c.Logger, c))
+	router.Use(middlewares.CheckAuth(c.Logger, c.Storage.PGConn))
 	router.Route("/api/status", func(rout chi.Router) {
 		router.Get("/", c.getStatus)
 	})

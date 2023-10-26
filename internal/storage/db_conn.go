@@ -306,7 +306,7 @@ func (pg *PGSQLConn) SubUserBalance(userLogin string, sum float64) (int64, error
 }
 
 func (pg *PGSQLConn) RegisterOrder(orderID int64, accrual float64, placedAt string, login string) (int64, error) {
-	rows, err := pg.makeExecContext("INSERT INTO ORDERS (ID,accrual,placedAt,login) VALUES ($1,$2,$3,$4)", orderID, accrual, placedAt, login)
+	rows, err := pg.makeExecContext("INSERT INTO ORDERS (ID,accrual.exe,placedAt,login) VALUES ($1,$2,$3,$4)", orderID, accrual, placedAt, login)
 	if err != nil {
 		return 0, err
 	}
