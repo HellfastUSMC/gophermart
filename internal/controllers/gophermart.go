@@ -11,10 +11,10 @@ import (
 	"strconv"
 	"time"
 
-	"github.com/HellfastUSMC/gophermart/gophermart/internal/config"
-	"github.com/HellfastUSMC/gophermart/gophermart/internal/logger"
-	"github.com/HellfastUSMC/gophermart/gophermart/internal/middlewares"
-	"github.com/HellfastUSMC/gophermart/gophermart/internal/storage"
+	"github.com/HellfastUSMC/gophermart/internal/config"
+	"github.com/HellfastUSMC/gophermart/internal/logger"
+	"github.com/HellfastUSMC/gophermart/internal/middlewares"
+	"github.com/HellfastUSMC/gophermart/internal/storage"
 	"github.com/go-chi/chi/v5"
 	"github.com/rs/zerolog/log"
 )
@@ -27,7 +27,7 @@ type GmartController struct {
 
 func (c *GmartController) Route() *chi.Mux {
 	router := chi.NewRouter()
-	router.Use(middlewares.CheckAuth(c.Logger, c.Storage.PGConn))
+	router.Use(middlewares.CheckAuth(c.Logger, c.Storage.Tokens))
 	router.Route("/api/status", func(rout chi.Router) {
 		router.Get("/", c.getStatus)
 	})
@@ -112,15 +112,29 @@ func (c *GmartController) postOrder(res http.ResponseWriter, req *http.Request) 
 		http.Error(res, "cannot parse int64 from body", http.StatusInternalServerError)
 		return
 	}
-	exists, err := c.Storage.PGConn.CheckOrderIDExists(orderID)
-	if err != nil {
-		log.Error().Err(err).Msg("cannot check order ID in DB")
-		http.Error(res, "cannot check order ID in DB", http.StatusInternalServerError)
-		return
+	//exists, err := c.Storage.PGConn.CheckOrderIDExists(orderID)
+	//fmt.Println("order in db exists", exists, orderID)
+	//if err != nil {
+	//	log.Error().Err(err).Msg("cannot check order ID in DB")
+	//	http.Error(res, "cannot check order ID in DB", http.StatusInternalServerError)
+	//	return
+	//}
+	//if exists {
+	//	log.Error().Err(err).Msg("order ID already exists")
+	//	http.Error(res, "order ID already exists", http.StatusConflict)
+	//	return
+	//}
+	login := ""
+	for key, val := range c.Storage.Tokens {
+		if val.Token == token {
+			login = key
+			break
+		}
 	}
-	if exists {
-		log.Error().Err(err).Msg("order ID already exists")
-		http.Error(res, "order ID already exists", http.StatusConflict)
+	_, err = c.Storage.PGConn.RegisterOrder(orderID, 0, time.Now().Format(time.RFC3339), login)
+	if err != nil {
+		log.Error().Err(err).Msg("order already exist")
+		http.Error(res, "order already exist", http.StatusConflict)
 		return
 	}
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
@@ -128,7 +142,7 @@ func (c *GmartController) postOrder(res http.ResponseWriter, req *http.Request) 
 	r, err := http.NewRequestWithContext(
 		ctx,
 		http.MethodGet,
-		fmt.Sprintf("%s/api/orders/%d", c.Config.CashbackAddr, orderID),
+		fmt.Sprintf("http://%s/api/orders/%d", c.Config.CashbackAddr, orderID),
 		nil,
 	)
 	if err != nil {
@@ -144,6 +158,7 @@ func (c *GmartController) postOrder(res http.ResponseWriter, req *http.Request) 
 		return
 	}
 	rBody, err := io.ReadAll(response.Body)
+	fmt.Println(string(rBody), "CB response")
 	order := storage.Order{}
 	err = json.Unmarshal(rBody, &order)
 	if err != nil {
@@ -162,14 +177,7 @@ func (c *GmartController) postOrder(res http.ResponseWriter, req *http.Request) 
 		http.Error(res, "order rejected from CB", http.StatusConflict)
 		return
 	}
-	login := ""
-	for key, val := range c.Storage.Tokens {
-		if val.Token == token {
-			login = key
-			break
-		}
-	}
-	c.Storage.Orders[orderID] = storage.Order{ID: orderID, Login: login}
+	//c.Storage.Orders[orderID] = storage.Order{ID: orderID, Login: login}
 	res.Header().Add("Content-Type", "application/json")
 	res.Header().Add("Date", time.Now().Format(http.TimeFormat))
 	res.WriteHeader(http.StatusOK)
@@ -218,6 +226,7 @@ func (c *GmartController) loginUser(res http.ResponseWriter, req *http.Request) 
 		return
 	}
 	res.Header().Add("Content-Type", "application/json")
+	res.Header().Add("Authorization", resp.Token)
 	res.Header().Add("Date", time.Now().Format(http.TimeFormat))
 	res.WriteHeader(http.StatusOK)
 	if _, err = res.Write(respJSON); err != nil {
@@ -270,6 +279,7 @@ func (c *GmartController) registerUser(res http.ResponseWriter, req *http.Reques
 	}
 	res.Header().Add("Content-Type", "application/json")
 	res.Header().Add("Date", time.Now().Format(http.TimeFormat))
+	res.Header().Add("Authorization", token.Token)
 	res.WriteHeader(http.StatusOK)
 	_, err = res.Write(tokenJSON)
 	if err != nil {
@@ -288,17 +298,17 @@ func (c *GmartController) generateToken() (token string) {
 }
 
 func (c *GmartController) getUserWithdrawals(res http.ResponseWriter, req *http.Request) {
-	credentials := req.Header.Get("Authorization")
-	login, _, err := storage.BasicCredDecode(credentials)
-	if err != nil {
-		log.Error().Err(err).Msg("cannot decode credentials")
-		http.Error(res, "cannot decode credentials", http.StatusInternalServerError)
-		return
-	}
+	token := req.Header.Get("Authorization")
+	login := c.findLoginByToken(token)
 	withdrawals, err := c.Storage.PGConn.GetUserWithdrawals(login)
 	if err != nil {
 		log.Error().Err(err).Msg("cannot get user withdrawals")
 		http.Error(res, "cannot get user withdrawals", http.StatusInternalServerError)
+		return
+	}
+	if withdrawals == nil {
+		log.Error().Err(err).Msg("no withdrawals found for this user")
+		http.Error(res, "no withdrawals found for this user", http.StatusNoContent)
 		return
 	}
 	withdrawalsJSON, err := json.Marshal(withdrawals)
@@ -318,13 +328,8 @@ func (c *GmartController) getUserWithdrawals(res http.ResponseWriter, req *http.
 }
 
 func (c *GmartController) getUserBalance(res http.ResponseWriter, req *http.Request) {
-	credentials := req.Header.Get("Authorization")
-	login, _, err := storage.BasicCredDecode(credentials)
-	if err != nil {
-		log.Error().Err(err).Msg("cannot decode credentials")
-		http.Error(res, "cannot decode credentials", http.StatusInternalServerError)
-		return
-	}
+	token := req.Header.Get("Authorization")
+	login := c.findLoginByToken(token)
 	balance, allTimeBal, err := c.Storage.PGConn.GetUserBalance(login)
 	if err != nil {
 		log.Error().Err(err).Msg("cannot get user balance")
@@ -352,21 +357,42 @@ func (c *GmartController) getUserBalance(res http.ResponseWriter, req *http.Requ
 
 }
 
+func (c *GmartController) findLoginByToken(token string) string {
+	for _, val := range c.Storage.Tokens {
+		if val.Token == token {
+			return val.User
+		}
+	}
+	return ""
+}
+
 func (c *GmartController) getUserOrders(res http.ResponseWriter, req *http.Request) {
-	credentials := req.Header.Get("Authorization")
-	login, _, err := storage.BasicCredDecode(credentials)
-	if err != nil {
-		log.Error().Err(err).Msg("cannot decode credentials")
-		http.Error(res, "cannot decode credentials", http.StatusInternalServerError)
+	token := req.Header.Get("Authorization")
+	//login, _, err := storage.BasicCredDecode(credentials)
+	//if err != nil {
+	//	log.Error().Err(err).Msg("cannot decode credentials")
+	//	http.Error(res, "cannot decode credentials", http.StatusInternalServerError)
+	//	return
+	////}
+	//userID, err := c.Storage.PGConn.GetUserID(login)
+
+	//if err != nil {
+	//	log.Error().Err(err).Msg("cannot get user login")
+	//	http.Error(res, "cannot get user login", http.StatusInternalServerError)
+	//	return
+	//}
+	login := c.findLoginByToken(token)
+	if login == "" {
+		log.Error().Msg("cannot get user login")
+		http.Error(res, "cannot get user login", http.StatusInternalServerError)
 		return
 	}
-	userID, err := c.Storage.PGConn.GetUserID(login)
-	if err != nil {
-		log.Error().Err(err).Msg("cannot get user ID")
-		http.Error(res, "cannot get user ID", http.StatusInternalServerError)
+	orders, err := c.Storage.PGConn.GetUserOrders(login)
+	if orders == nil {
+		log.Error().Err(err).Msg("no orders found for this user")
+		http.Error(res, "no orders found for this user", http.StatusNoContent)
 		return
 	}
-	orders, err := c.Storage.PGConn.GetUserOrders(userID)
 	if err != nil {
 		log.Error().Err(err).Msg("cannot get user orders")
 		http.Error(res, "cannot get user orders", http.StatusInternalServerError)

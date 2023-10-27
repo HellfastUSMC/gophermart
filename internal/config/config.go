@@ -17,17 +17,17 @@ type SysConfig struct {
 
 func (c *SysConfig) ParseStartupFlags() error {
 	serverFlags := flag.NewFlagSet("server config", flag.ExitOnError)
-	serverFlags.StringVar(&c.GmartAddr, "addr", "localhost:8080", "Address and port of server string")
+	serverFlags.StringVar(&c.GmartAddr, "a", "localhost:8080", "Address and port of server string")
 	serverFlags.StringVar(
 		&c.CashbackAddr,
-		"rem",
+		"r",
 		"localhost:8081",
 		"Address and port of cashback service string",
 	)
 	serverFlags.Int64Var(&c.CheckInterval, "int", 600, "Checking interval in seconds int")
 	serverFlags.StringVar(
 		&c.DBConnString,
-		"db",
+		"d",
 		"postgres://postgres:postgres@localhost:5432/postgres?sslmode=disable",
 		"DB connection string",
 	)

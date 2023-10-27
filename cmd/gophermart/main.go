@@ -7,9 +7,9 @@ import (
 	"runtime"
 	"time"
 
-	"github.com/HellfastUSMC/gophermart/gophermart/internal/config"
-	"github.com/HellfastUSMC/gophermart/gophermart/internal/controllers"
-	"github.com/HellfastUSMC/gophermart/gophermart/internal/storage"
+	"github.com/HellfastUSMC/gophermart/internal/config"
+	"github.com/HellfastUSMC/gophermart/internal/controllers"
+	"github.com/HellfastUSMC/gophermart/internal/storage"
 	"github.com/go-chi/chi/v5"
 	"github.com/rs/zerolog"
 )

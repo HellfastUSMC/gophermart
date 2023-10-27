@@ -3,7 +3,7 @@ package storage
 import (
 	"time"
 
-	"github.com/HellfastUSMC/gophermart/gophermart/internal/logger"
+	"github.com/HellfastUSMC/gophermart/internal/logger"
 )
 
 //var Roles = map[string]string{"admin": "admin", "moderator": "moderator", "user": "user"}

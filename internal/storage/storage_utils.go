@@ -6,15 +6,15 @@ import (
 	"encoding/base64"
 	"encoding/json"
 	"fmt"
-	"golang.org/x/crypto/bcrypt"
 	"io"
 	"net/http"
 	"regexp"
 	"strings"
 	"time"
 
-	"github.com/HellfastUSMC/gophermart/gophermart/internal/logger"
+	"github.com/HellfastUSMC/gophermart/internal/logger"
 	"github.com/pressly/goose/v3"
+	"golang.org/x/crypto/bcrypt"
 )
 
 func CheckOrderStatus(orderID int64, cashbackAddr string, login string, log logger.CLogger, pg *PGSQLConn) error {
@@ -23,7 +23,7 @@ func CheckOrderStatus(orderID int64, cashbackAddr string, login string, log logg
 	r, err := http.NewRequestWithContext(
 		ctx,
 		http.MethodGet,
-		fmt.Sprintf("%s/api/orders/%d", cashbackAddr, orderID),
+		fmt.Sprintf("http://%s/api/orders/%d", cashbackAddr, orderID),
 		nil,
 	)
 	if err != nil {
@@ -65,6 +65,7 @@ func CheckOrderStatus(orderID int64, cashbackAddr string, login string, log logg
 func BasicCredDecode(encodedCredentials string) (login, password string, err error) {
 	b64creds, err := base64.StdEncoding.DecodeString(encodedCredentials)
 	loginPass := strings.Split(string(b64creds), ":")
+	fmt.Println(loginPass, b64creds)
 	if err != nil {
 		return "", "", err
 	}
