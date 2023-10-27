@@ -1,6 +1,6 @@
 module github.com/HellfastUSMC/gophermart
 
-go 1.23
+go 1.18
 
 require (
 	github.com/caarlos0/env/v6 v6.10.1
