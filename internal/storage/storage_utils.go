@@ -37,6 +37,10 @@ func CheckOrderStatus(orderID int64, cashbackAddr string, login string, log logg
 		return err
 	}
 	rBody, err := io.ReadAll(response.Body)
+	if err != nil {
+		pg.Logger.Error().Err(err).Msg("error in rows")
+		return err
+	}
 	order := Order{}
 	err = json.Unmarshal(rBody, &order)
 	if err != nil {

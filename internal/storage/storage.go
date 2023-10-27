@@ -62,7 +62,7 @@ type Order struct {
 type User struct {
 	ID              int64   `json:"id"`
 	Role            string  `json:"role"`
-	Firstname       string  `json:"firstname'"`
+	Firstname       string  `json:"firstname"`
 	Lastname        string  `json:"lastname"`
 	Login           int64   `json:"phone"`
 	Email           string  `json:"email"`

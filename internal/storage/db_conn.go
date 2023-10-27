@@ -43,8 +43,12 @@ func (pg *PGSQLConn) makeQueryContext(query string, args ...any) (*sql.Rows, err
 	}
 	var netErr net.Error
 	rows, err := retryReadFunc(2, 3, f, &netErr)
-	defer rows.Close()
 	if err != nil {
+		return nil, err
+	}
+	err = rows.Close()
+	if err != nil {
+		pg.Logger.Error().Err(err).Msg("error when closing rows")
 		return nil, err
 	}
 	return rows, nil
@@ -72,7 +76,10 @@ func (pg *PGSQLConn) CheckOrderIDExists(orderID int64) (bool, error) {
 		pg.Logger.Error().Err(err).Msg("error when query orderID from DB")
 		return false, err
 	}
-	defer rows.Close()
+	if rows.Err() != nil {
+		pg.Logger.Error().Err(err).Msg("error in rows")
+		return false, err
+	}
 	var orderIDDB int64
 	for rows.Next() {
 		var id int64
@@ -85,6 +92,11 @@ func (pg *PGSQLConn) CheckOrderIDExists(orderID int64) (bool, error) {
 	}
 	if orderIDDB != 0 {
 		return true, nil
+	}
+	err = rows.Close()
+	if err != nil {
+		pg.Logger.Error().Err(err).Msg("error when closing rows")
+		return false, err
 	}
 	return false, nil
 }
@@ -113,7 +125,10 @@ func (pg *PGSQLConn) GetUserBalance(login string) (float64, float64, error) {
 		pg.Logger.Error().Err(err).Msg("error when query userID from DB")
 		return 0, 0, err
 	}
-	defer rows.Close()
+	if rows.Err() != nil {
+		pg.Logger.Error().Err(err).Msg("error in rows")
+		return 0, 0, err
+	}
 	var balance float64
 	var allTimeBal float64
 	for rows.Next() {
@@ -122,6 +137,11 @@ func (pg *PGSQLConn) GetUserBalance(login string) (float64, float64, error) {
 			pg.Logger.Error().Err(err).Msg("error when scanning rows")
 			return 0, 0, err
 		}
+	}
+	err = rows.Close()
+	if err != nil {
+		pg.Logger.Error().Err(err).Msg("error when closing rows")
+		return 0, 0, err
 	}
 	return balance, allTimeBal, nil
 }
@@ -132,7 +152,10 @@ func (pg *PGSQLConn) GetUserWithdrawals(login string) ([]Withdraw, error) {
 		pg.Logger.Error().Err(err).Msg("error when query userID from DB")
 		return nil, err
 	}
-	defer rows.Close()
+	if rows.Err() != nil {
+		pg.Logger.Error().Err(err).Msg("error in rows")
+		return nil, err
+	}
 	var (
 		withdrawals []Withdraw
 		withdraw    Withdraw
@@ -147,6 +170,11 @@ func (pg *PGSQLConn) GetUserWithdrawals(login string) ([]Withdraw, error) {
 	}
 	if len(withdrawals) == 0 {
 		return nil, nil
+	}
+	err = rows.Close()
+	if err != nil {
+		pg.Logger.Error().Err(err).Msg("error when closing rows")
+		return nil, err
 	}
 	return withdrawals, nil
 }
@@ -163,8 +191,11 @@ func (pg *PGSQLConn) GetUserOrders(login string) ([]Order, error) {
 	}
 	var netErr net.Error
 	rows, err := retryReadFunc(2, 3, f, &netErr)
-	defer rows.Close()
 	if err != nil {
+		return nil, err
+	}
+	if rows.Err() != nil {
+		pg.Logger.Error().Err(err).Msg("error in rows")
 		return nil, err
 	}
 	if rows == nil {
@@ -182,6 +213,11 @@ func (pg *PGSQLConn) GetUserOrders(login string) ([]Order, error) {
 		}
 		orders = append(orders, order)
 	}
+	err = rows.Close()
+	if err != nil {
+		pg.Logger.Error().Err(err).Msg("error when closing rows")
+		return nil, err
+	}
 	return orders, nil
 }
 
@@ -193,12 +229,19 @@ func (pg *PGSQLConn) CheckLastID(table string) (ID int64, err error) {
 		if err != nil {
 			return nil, err
 		}
+		if rows.Err() != nil {
+			pg.Logger.Error().Err(err).Msg("error in rows")
+			return nil, err
+		}
 		return rows, nil
 	}
 	var netErr net.Error
 	rows, err := retryReadFunc(2, 3, f, &netErr)
-	defer rows.Close()
 	if err != nil {
+		return 0, err
+	}
+	if rows.Err() != nil {
+		pg.Logger.Error().Err(err).Msg("error in rows")
 		return 0, err
 	}
 	UserID := int64(0)
@@ -207,6 +250,11 @@ func (pg *PGSQLConn) CheckLastID(table string) (ID int64, err error) {
 		if err != nil {
 			return 0, err
 		}
+	}
+	err = rows.Close()
+	if err != nil {
+		pg.Logger.Error().Err(err).Msg("error when closing rows")
+		return 0, err
 	}
 	return ID, nil
 }
@@ -290,13 +338,21 @@ func (pg *PGSQLConn) CheckUserCashback(userLogin string) (float64, float64, erro
 		pg.Logger.Error().Err(err).Msg("error when query userID from DB")
 		return 0, 0, err
 	}
-	defer rows.Close()
+	if rows.Err() != nil {
+		pg.Logger.Error().Err(err).Msg("error in rows")
+		return 0, 0, err
+	}
 	bal := Balance{}
 	for rows.Next() {
 		err := rows.Scan(bal.Current, bal.Withdrawn)
 		if err != nil {
 			return 0, 0, err
 		}
+	}
+	err = rows.Close()
+	if err != nil {
+		pg.Logger.Error().Err(err).Msg("error when closing rows")
+		return 0, 0, err
 	}
 	return bal.Current, bal.Withdrawn, nil
 }
@@ -353,8 +409,11 @@ func (pg *PGSQLConn) CheckUserCreds(login string, plainPassword string) (bool, e
 	}
 	var netErr net.Error
 	rows, err := retryReadFunc(2, 3, f, &netErr)
-	defer rows.Close()
 	if err != nil {
+		return false, err
+	}
+	if rows.Err() != nil {
+		pg.Logger.Error().Err(err).Msg("error in rows")
 		return false, err
 	}
 	var userHashedPwd []byte
@@ -366,6 +425,11 @@ func (pg *PGSQLConn) CheckUserCreds(login string, plainPassword string) (bool, e
 	}
 	if CheckPasswordHash(userHashedPwd, []byte(plainPassword)) {
 		return false, nil
+	}
+	err = rows.Close()
+	if err != nil {
+		pg.Logger.Error().Err(err).Msg("error when closing rows")
+		return false, err
 	}
 	return true, nil
 }

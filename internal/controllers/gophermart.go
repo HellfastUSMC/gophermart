@@ -81,7 +81,7 @@ func (c *GmartController) withdrawFromBalance(res http.ResponseWriter, req *http
 
 func (c *GmartController) CheckTokens() {
 	for key, val := range c.Storage.Tokens {
-		if time.Now().Sub(val.Created) > 1*time.Hour {
+		if time.Since(val.Created) > 1*time.Hour {
 			delete(c.Storage.Tokens, key)
 		}
 	}
@@ -158,6 +158,10 @@ func (c *GmartController) postOrder(res http.ResponseWriter, req *http.Request) 
 		return
 	}
 	rBody, err := io.ReadAll(response.Body)
+	if err != nil {
+		log.Error().Err(err).Msg("error in rows")
+		http.Error(res, "error in rows", http.StatusInternalServerError)
+	}
 	fmt.Println(string(rBody), "CB response")
 	order := storage.Order{}
 	err = json.Unmarshal(rBody, &order)
