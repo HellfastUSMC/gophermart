@@ -28,9 +28,9 @@ func main() {
 	}
 	store := storage.NewStorage(dbConn, currentStats, &log)
 	controller := controllers.NewGmartController(&log, conf, store)
-	tickCheckStatus := time.NewTicker(time.Duration(conf.CheckInterval) * time.Second)
+	//tickCheckStatus := time.NewTicker(time.Duration(conf.CheckInterval) * time.Second)
 	tickCheckTokens := time.NewTicker(1 * time.Hour)
-	tickCheckOrders := time.NewTicker(10 * time.Minute)
+	tickCheckOrders := time.NewTicker(1 * time.Second)
 	go func() {
 		defer runtime.Goexit()
 		for {
@@ -48,17 +48,17 @@ func main() {
 			}
 		}
 	}()
-	go func() {
-		defer runtime.Goexit()
-		for {
-			<-tickCheckStatus.C
-			err := controller.RenewStatus()
-			if err != nil {
-				log.Error().Err(err).Msg("error in status renew")
-			}
-			log.Info().Msg("status renewed")
-		}
-	}()
+	//go func() {
+	//	defer runtime.Goexit()
+	//	for {
+	//		<-tickCheckStatus.C
+	//		err := controller.RenewStatus()
+	//		if err != nil {
+	//			log.Error().Err(err).Msg("error in status renew")
+	//		}
+	//		log.Info().Msg("status renewed")
+	//	}
+	//}()
 	router := chi.NewRouter()
 	router.Mount("/", controller.Route())
 	log.Info().Msg(fmt.Sprintf(

@@ -21,26 +21,6 @@ func CheckAuth(log logger.CLogger, tokens map[string]storage.Token) func(h http.
 				h.ServeHTTP(res, req)
 				return
 			}
-			//if credentials != "" && strings.Contains(req.Header.Get("Authorization"), "basic") {
-			//	login, password, err := storage.BasicCredDecode(credentials)
-			//	if err != nil {
-			//		log.Error().Err(err).Msg("cannot decode credentials")
-			//		http.Error(res, "Cannot decode credentials", http.StatusInternalServerError)
-			//		return
-			//	}
-			//	exists, err := pg.CheckUserCreds(login, password)
-			//	if err != nil {
-			//		log.Error().Err(err).Msg("cannot check credentials")
-			//		http.Error(res, "Cannot check credentials", http.StatusInternalServerError)
-			//		return
-			//	}
-			//	if exists {
-			//		h.ServeHTTP(res, req)
-			//	}
-			//	log.Error().Err(fmt.Errorf("auth error")).Msg(fmt.Sprintf("Somebody tried to open %s with wrong credentials", req.URL.String()))
-			//	http.Error(res, "Credentials are wrong", http.StatusUnauthorized)
-			//
-			//}
 			if credentials != "" {
 				for _, val := range tokens {
 					if val.Token == credentials {

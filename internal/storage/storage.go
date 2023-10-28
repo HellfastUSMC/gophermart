@@ -37,11 +37,11 @@ type UserCred struct {
 }
 
 type Order struct {
-	ID      int64     `json:"number"`
-	Status  string    `json:"status"`
-	Accrual float64   `json:"accrual.exe"`
-	Date    time.Time `json:"placed_at"`
-	Login   string    `json:"-"`
+	ID      string  `json:"order"`
+	Status  string  `json:"status"`
+	Accrual float64 `json:"accrual"`
+	Date    string  `json:"-"`
+	Login   string  `json:"-"`
 }
 
 //type Item struct {
@@ -83,7 +83,7 @@ type Balance struct {
 
 type Withdraw struct {
 	ID          int64   `json:"id"`
-	OrderID     int64   `json:"order"`
+	OrderID     string  `json:"order"`
 	Sum         float64 `json:"sum"`
 	ProcessedAt string  `json:"processed_at"`
 	Login       string  `json:"-"`

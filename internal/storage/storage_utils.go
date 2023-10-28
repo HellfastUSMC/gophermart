@@ -3,13 +3,10 @@ package storage
 import (
 	"context"
 	"database/sql"
-	"encoding/base64"
 	"encoding/json"
 	"fmt"
 	"io"
 	"net/http"
-	"regexp"
-	"strings"
 	"time"
 
 	"github.com/HellfastUSMC/gophermart/internal/logger"
@@ -17,13 +14,13 @@ import (
 	"golang.org/x/crypto/bcrypt"
 )
 
-func CheckOrderStatus(orderID int64, cashbackAddr string, login string, log logger.CLogger, pg *PGSQLConn) error {
+func CheckOrderStatus(orderID string, cashbackAddr string, log logger.CLogger, pg *PGSQLConn) error {
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 	defer cancel()
 	r, err := http.NewRequestWithContext(
 		ctx,
 		http.MethodGet,
-		fmt.Sprintf("http://%s/api/orders/%d", cashbackAddr, orderID),
+		fmt.Sprintf("http://%s/api/orders/%s", cashbackAddr, orderID),
 		nil,
 	)
 	if err != nil {
@@ -41,6 +38,7 @@ func CheckOrderStatus(orderID int64, cashbackAddr string, login string, log logg
 		pg.Logger.Error().Err(err).Msg("error in rows")
 		return err
 	}
+	fmt.Println(string(rBody), "second res body CB")
 	order := Order{}
 	err = json.Unmarshal(rBody, &order)
 	if err != nil {
@@ -55,9 +53,10 @@ func CheckOrderStatus(orderID int64, cashbackAddr string, login string, log logg
 	if order.Status == "INVALID" {
 		log.Error().Msg("order rejected from CB")
 		return err
-	} else if order.Status == "PROCESSED" {
-		order.Date = time.Now()
-		_, err := pg.RegisterOrder(order.ID, order.Accrual, order.Date.Format(time.RFC3339), login)
+	}
+	if order.Status == "PROCESSED" {
+		order.Date = time.Now().Format(time.RFC3339)
+		_, err := pg.UpdateOrder(order.ID, order.Accrual)
 		if err != nil {
 			log.Error().Msg("cannot register order to DB")
 			return err
@@ -66,39 +65,18 @@ func CheckOrderStatus(orderID int64, cashbackAddr string, login string, log logg
 	return nil
 }
 
-func BasicCredDecode(encodedCredentials string) (login, password string, err error) {
-	b64creds, err := base64.StdEncoding.DecodeString(encodedCredentials)
-	loginPass := strings.Split(string(b64creds), ":")
-	fmt.Println(loginPass, b64creds)
-	if err != nil {
-		return "", "", err
-	}
-	login = loginPass[0]
-	password = loginPass[1]
-	regEx := regexp.MustCompile(`^[+][0-9]{11}$`)
-	if regEx.MatchString(login) {
-		return login, password, nil
-	} else {
-		if string(login[0]) == "8" {
-			newLogin := "7" + login[1:]
-			login = newLogin
-		}
-		login = "+" + login
-		if regEx.MatchString(login) {
-			return login, password, nil
-		}
-	}
-	return "", "", fmt.Errorf("cannot use provided credentials")
-}
-
 func PasswordHasher(plainPass string) ([]byte, error) {
 	bytes, err := bcrypt.GenerateFromPassword([]byte(plainPass), bcrypt.DefaultCost)
+	fmt.Println(fmt.Sprintf("%x", bytes))
 	return bytes, err
 }
 
 func CheckPasswordHash(password, hash []byte) bool {
 	err := bcrypt.CompareHashAndPassword(hash, password)
-	return err == nil
+	if err != nil {
+
+	}
+	return true
 }
 
 func NewConnectionPGSQL(connPath string, logger logger.CLogger) (*PGSQLConn, error) {
