@@ -29,9 +29,10 @@ type GmartController struct {
 func (c *GmartController) Route() *chi.Mux {
 	router := chi.NewRouter()
 	router.Use(middlewares.CheckAuth(c.Logger, c.Storage.Tokens))
-	router.Route("/api/status", func(rout chi.Router) {
-		router.Get("/", c.getStatus)
-	})
+	router.Use(middlewares.RequestPrinter(c.Logger))
+	//router.Route("/api/status", func(rout chi.Router) {
+	//	router.Get("/", c.getStatus)
+	//})
 	router.Route("/api/user", func(router chi.Router) {
 		router.Get("/orders", c.getUserOrders)
 		router.Get("/balance", c.getUserBalance)
@@ -122,25 +123,32 @@ func (c *GmartController) postOrder(res http.ResponseWriter, req *http.Request) 
 		return
 	}
 	_, err = c.Storage.PGConn.RegisterOrder(orderID, 0, time.Now().Format(time.RFC3339), login)
-	//
-	if strings.Contains(err.Error(), "23505") {
-		order, err := c.Storage.PGConn.CheckUserOrder(login, orderID)
-		if err != nil {
-			log.Error().Err(err).Msg("error when searching for order in DB")
-			http.Error(res, "error when searching for order in DB", http.StatusUnprocessableEntity)
-			return
-		}
-		if order.Login == login {
-			log.Info().Msg("order processing")
-			http.Error(res, "order processing", http.StatusOK)
-			return
-		}
-		log.Info().Msg("order processing")
-		http.Error(res, "order processing", http.StatusConflict)
-		return
-
-	}
 	if err != nil {
+		if strings.Contains(err.Error(), "23505") {
+			order, err := c.Storage.PGConn.GetOrder(orderID)
+			if err != nil {
+				log.Error().Err(err).Msg("error when searching for order in DB")
+				http.Error(res, "error when searching for order in DB", http.StatusInternalServerError)
+				return
+			}
+			if order.Login == login {
+				orderJSON, err := json.Marshal(order)
+				if err != nil {
+					log.Error().Err(err).Msg("error when marshaling order")
+					http.Error(res, "error when marshaling order", http.StatusInternalServerError)
+					return
+				}
+				res.Header().Add("Content-Type", "application/json")
+				res.Header().Add("Date", time.Now().Format(http.TimeFormat))
+				res.WriteHeader(http.StatusOK)
+				_, err = res.Write(orderJSON)
+				if err != nil {
+					log.Error().Err(err).Msg("cannot write response")
+					http.Error(res, "cannot write response", http.StatusInternalServerError)
+					return
+				}
+			}
+		}
 		log.Error().Err(err).Msg("order already exist")
 		http.Error(res, "order already exist", http.StatusConflict)
 		return
@@ -173,13 +181,13 @@ func (c *GmartController) postOrder(res http.ResponseWriter, req *http.Request) 
 	fmt.Println(string(rBody), "CB response", response.StatusCode)
 	if response.StatusCode == http.StatusNoContent {
 		log.Error().Err(err).Msg("order not registered in cashback service")
-		http.Error(res, "order not registered in cashback service", http.StatusNoContent)
+		http.Error(res, "order not registered in cashback service", http.StatusAccepted)
 		return
 	}
 	order := storage.Order{}
 	err = json.Unmarshal(rBody, &order)
 	if err != nil {
-		log.Error().Err(err).Msg("error in unmarshal response body!!!")
+		log.Error().Err(err).Msg("error in unmarshal response body")
 		http.Error(res, "error in unmarshal response body", http.StatusInternalServerError)
 		return
 	}
@@ -189,6 +197,20 @@ func (c *GmartController) postOrder(res http.ResponseWriter, req *http.Request) 
 		log.Error().Err(err).Msg("error in closing response body")
 		http.Error(res, "error in closing response body", http.StatusInternalServerError)
 		return
+	}
+	if order.Status == "PROCESSED" {
+		_, err = c.Storage.PGConn.UpdateOrder(order.ID, order.Accrual, order.Status)
+		if err != nil {
+			log.Error().Msg("error in update order in DB")
+			http.Error(res, "error in update order in DB", http.StatusInternalServerError)
+			return
+		}
+		_, err = c.Storage.PGConn.AddUserBalance(login, order.Accrual)
+		if err != nil {
+			log.Error().Msg("error in update user balance in DB")
+			http.Error(res, "error in update user balance in DB", http.StatusInternalServerError)
+			return
+		}
 	}
 	if order.Status == "INVALID" {
 		log.Error().Msg("order rejected from CB")
@@ -347,7 +369,9 @@ func (c *GmartController) getUserWithdrawals(res http.ResponseWriter, req *http.
 func (c *GmartController) getUserBalance(res http.ResponseWriter, req *http.Request) {
 	token := req.Header.Get("Authorization")
 	login := c.findLoginByToken(token)
-	balance, allTimeBal, err := c.Storage.PGConn.GetUserBalance(login)
+	fmt.Println(token, login)
+	balance, withdrawn, err := c.Storage.PGConn.GetUserBalance(login)
+	fmt.Println(balance)
 	if err != nil {
 		log.Error().Err(err).Msg("cannot get user balance")
 		http.Error(res, "cannot get user balance", http.StatusInternalServerError)
@@ -355,7 +379,7 @@ func (c *GmartController) getUserBalance(res http.ResponseWriter, req *http.Requ
 	}
 	bal := storage.Balance{
 		Current:   balance,
-		Withdrawn: allTimeBal,
+		Withdrawn: withdrawn,
 	}
 	balJSON, err := json.Marshal(bal)
 	if err != nil {

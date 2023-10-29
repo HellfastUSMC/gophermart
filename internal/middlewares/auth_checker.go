@@ -9,9 +9,9 @@ import (
 	"github.com/HellfastUSMC/gophermart/internal/storage"
 )
 
-type CHRespWriter struct {
-	http.ResponseWriter
-}
+//type CHRespWriter struct {
+//	http.ResponseWriter
+//}
 
 func CheckAuth(log logger.CLogger, tokens map[string]storage.Token) func(h http.Handler) http.Handler {
 	return func(h http.Handler) http.Handler {

@@ -4,7 +4,8 @@ CREATE TABLE IF NOT EXISTS USERS (
     		LOGIN varchar NOT NULL UNIQUE PRIMARY KEY,
             PASSWORD varchar NOT NULL,
     		CASHBACK double precision NOT NULL,
-    		CASHBACK_ALL double precision NOT NULL
+    		CASHBACK_ALL double precision NOT NULL,
+    		WITHDRAWN double precision NOT NULL
         );
 
 -- +goose Down

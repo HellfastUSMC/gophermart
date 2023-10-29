@@ -56,7 +56,7 @@ func CheckOrderStatus(orderID string, cashbackAddr string, log logger.CLogger, p
 	}
 	if order.Status == "PROCESSED" {
 		order.Date = time.Now().Format(time.RFC3339)
-		_, err := pg.UpdateOrder(order.ID, order.Accrual)
+		_, err := pg.UpdateOrder(order.ID, order.Accrual, order.Status)
 		if err != nil {
 			log.Error().Msg("cannot register order to DB")
 			return err

@@ -30,9 +30,8 @@ func (pg *PGSQLConn) Close() error {
 	return nil
 }
 
-func (pg *PGSQLConn) makeQueryContext(query string, args ...any) (*sql.Rows, error) {
-	ctx, cancel := context.WithTimeout(context.Background(), time.Second*10)
-	defer cancel()
+func (pg *PGSQLConn) makeQueryContext(query string, args ...any) (*sql.Rows, context.CancelFunc, error) {
+	ctx, cancel := context.WithTimeout(context.Background(), time.Second*60)
 	f := func() (*sql.Rows, error) {
 		rows, err := pg.DBConn.QueryContext(ctx, query, args...)
 		if err != nil {
@@ -43,135 +42,105 @@ func (pg *PGSQLConn) makeQueryContext(query string, args ...any) (*sql.Rows, err
 	var netErr net.Error
 	rows, err := retryReadFunc(2, 3, f, &netErr)
 	if err != nil {
-		return nil, err
+		return nil, cancel, err
 	}
-	err = rows.Close()
-	if err != nil {
-		pg.Logger.Error().Err(err).Msg("error when closing rows")
-		return nil, err
-	}
-	return rows, nil
+	return rows, cancel, nil
 }
 
-func (pg *PGSQLConn) makeExecContext(query string, args ...any) (int64, error) {
-	ctx, cancel := context.WithTimeout(context.Background(), time.Second*10)
-	defer cancel()
+func (pg *PGSQLConn) makeExecContext(query string, args ...any) (int64, context.CancelFunc, error) {
+	ctx, cancel := context.WithTimeout(context.Background(), time.Second*30)
+	//defer cancel()
 	res, err := pg.DBConn.ExecContext(ctx, query, args...)
 	if err != nil {
 		pg.Logger.Error().Err(err).Msg("error when query from DB")
-		return 0, err
+		return 0, cancel, err
 	}
 	rows, err := res.RowsAffected()
 	if err != nil {
 		pg.Logger.Error().Err(err).Msg("error when get rows affected")
-		return 0, err
+		return 0, cancel, err
 	}
-	return rows, nil
+	return rows, cancel, nil
 }
 
-func (pg *PGSQLConn) CheckOrderIDExists(orderID int64) (bool, error) {
-	rows, err := pg.makeQueryContext("SELECT * FROM ORDERS WHERE id=$1 ORDER BY ID DESC LIMIT 1", orderID)
-	if err != nil || rows == nil {
-		pg.Logger.Error().Err(err).Msg("error when query orderID from DB")
-		return false, err
-	}
-	if rows.Err() != nil {
-		pg.Logger.Error().Err(err).Msg("error in rows")
-		return false, err
-	}
-	var orderIDDB int64
-	for rows.Next() {
-		var id int64
-		err = rows.Scan(&id)
-		fmt.Println(id)
-		if err != nil {
-			pg.Logger.Error().Err(err).Msg("error when scanning orderID from rows")
-			return false, err
-		}
-	}
-	if orderIDDB != 0 {
-		return true, nil
-	}
-	err = rows.Close()
-	if err != nil {
-		pg.Logger.Error().Err(err).Msg("error when closing rows")
-		return false, err
-	}
-	return false, nil
-}
+//func (pg *PGSQLConn) CheckOrderIDExists(orderID int64) (bool, error) {
+//	rows, cancel := pg.makeQueryRowCTX("SELECT * FROM ORDERS WHERE id=$1", orderID)
+//	defer cancel()
+//	var orderIDDB int64
+//	err := rows.Scan(&orderIDDB)
+//	if err != nil {
+//		pg.Logger.Error().Err(err).Msg("error when scanning orderID from rows")
+//		return false, err
+//	}
+//	if orderIDDB != 0 {
+//		return true, nil
+//	}
+//	return false, nil
+//}
 
 func (pg *PGSQLConn) GetUserBalance(login string) (float64, float64, error) {
-	rows, err := pg.makeQueryContext("SELECT cashback, cashback_all FROM USERS WHERE login=$1", login)
-	if err != nil {
-		pg.Logger.Error().Err(err).Msg("error when query userID from DB")
-		return 0, 0, err
-	}
-	if rows.Err() != nil {
-		pg.Logger.Error().Err(err).Msg("error in rows")
-		return 0, 0, err
-	}
+	row, cancel := pg.makeQueryRowCTX("SELECT cashback, withdrawn FROM USERS WHERE login=$1", login)
+	defer cancel()
 	var balance float64
-	var allTimeBal float64
-	for rows.Next() {
-		err := rows.Scan(&balance, &allTimeBal)
-		if err != nil {
-			pg.Logger.Error().Err(err).Msg("error when scanning rows")
-			return 0, 0, err
-		}
-	}
-	err = rows.Close()
+	var withdrawn float64
+	err := row.Scan(&balance, &withdrawn)
 	if err != nil {
-		pg.Logger.Error().Err(err).Msg("error when closing rows")
+		pg.Logger.Error().Err(err).Msg("error when scanning rows")
 		return 0, 0, err
 	}
-	return balance, allTimeBal, nil
+	return balance, withdrawn, nil
 }
 
 func (pg *PGSQLConn) GetUserWithdrawals(login string) ([]Withdraw, error) {
-	rows, err := pg.makeQueryContext("SELECT * FROM WITHDRAWALS WHERE login=$1 ORDER BY ID DESC", login)
+	rows, cancel, err := pg.makeQueryContext("SELECT * FROM WITHDRAWALS WHERE login=$1 ORDER BY placed_at", login)
+	fmt.Println("Login -", login)
 	if err != nil {
-		pg.Logger.Error().Err(err).Msg("error when query userID from DB")
-		return nil, err
-	}
-	if rows.Err() != nil {
-		pg.Logger.Error().Err(err).Msg("error in rows")
+		pg.Logger.Error().Err(err).Msg("error when query user withdraws from DB")
 		return nil, err
 	}
 	var (
 		withdrawals []Withdraw
 		withdraw    Withdraw
 	)
+	fmt.Println(rows.NextResultSet())
 	for rows.Next() {
-		err := rows.Scan(withdraw.ID, withdraw.OrderID, withdraw.Sum, withdraw.ProcessedAt)
+		fmt.Println("scan...")
+		err := rows.Scan(&withdraw.ID, &withdraw.OrderID, &withdraw.Sum, &withdraw.ProcessedAt, &withdraw.Login)
 		if err != nil {
 			pg.Logger.Error().Err(err).Msg("error when scanning rows")
 			return nil, err
 		}
 		withdrawals = append(withdrawals, withdraw)
+		fmt.Println(withdraw, withdrawals)
 	}
-	if len(withdrawals) == 0 {
-		return nil, nil
+	if rows.Err() != nil {
+		pg.Logger.Error().Err(err).Msg("error in rows")
+		return nil, err
 	}
 	err = rows.Close()
 	if err != nil {
 		pg.Logger.Error().Err(err).Msg("error when closing rows")
 		return nil, err
 	}
+	if len(withdrawals) == 0 {
+		return nil, nil
+	}
+	defer cancel()
 	return withdrawals, nil
 }
 
-func (pg *PGSQLConn) makeQueryRowCTX(query string, args ...any) *sql.Row {
-	ctx, cancel := context.WithTimeout(context.Background(), time.Second*999)
-	defer cancel()
+func (pg *PGSQLConn) makeQueryRowCTX(query string, args ...any) (*sql.Row, context.CancelFunc) {
+	ctx, cancel := context.WithTimeout(context.Background(), time.Second*30)
+	//defer cancel()
 	row := pg.DBConn.QueryRowContext(ctx, query, args...)
-	return row
-
+	return row, cancel
 }
 
-func (pg *PGSQLConn) CheckUserOrder(login string, order string) (Order, error) {
-	row := pg.makeQueryRowCTX("SELECT * FROM ORDERS WHERE login=$1 AND id=$2", login, order)
+func (pg *PGSQLConn) GetOrder(order string) (Order, error) {
+	row, cancel := pg.makeQueryRowCTX("SELECT * FROM ORDERS WHERE id=$1", order)
+	defer cancel()
 	var ord Order
-	err := row.Scan(&ord.ID, &ord.Accrual, &ord.Date, &ord.Login)
+	err := row.Scan(&ord.ID, &ord.Accrual, &ord.Date, &ord.Login, &ord.Status)
 	if err != nil {
 		pg.Logger.Error().Err(err).Msg("error when scanning row")
 		return ord, err
@@ -180,33 +149,18 @@ func (pg *PGSQLConn) CheckUserOrder(login string, order string) (Order, error) {
 }
 
 func (pg *PGSQLConn) GetUserOrders(login string) ([]Order, error) {
-	ctx, cancel := context.WithTimeout(context.Background(), time.Second*10)
-	defer cancel()
-	f := func() (*sql.Rows, error) {
-		rows, err := pg.DBConn.QueryContext(ctx, "SELECT * FROM ORDERS WHERE login=$1 ORDER BY id DESC", login)
-		if err != nil {
-			return nil, err
-		}
-		return rows, nil
-	}
-	var netErr net.Error
-	rows, err := retryReadFunc(2, 3, f, &netErr)
+	rows, cancel, err := pg.makeQueryContext("SELECT * FROM ORDERS WHERE login=$1 ORDER BY placed_at", login)
 	if err != nil {
+		pg.Logger.Error().Err(err).Msg("error when searching user orders in DB")
 		return nil, err
 	}
-	if rows.Err() != nil {
-		pg.Logger.Error().Err(err).Msg("error in rows")
-		return nil, err
-	}
-	if rows == nil {
-		return nil, nil
-	}
+	defer cancel()
 	var (
 		orders []Order
 		order  Order
 	)
 	for rows.Next() {
-		err := rows.Scan(&order.ID, &order.Accrual, &order.Date, &order.Login)
+		err := rows.Scan(&order.ID, &order.Accrual, &order.Date, &order.Login, &order.Status)
 		if err != nil {
 			pg.Logger.Error().Err(err).Msg("error in scanning rows")
 			return nil, err
@@ -220,44 +174,6 @@ func (pg *PGSQLConn) GetUserOrders(login string) ([]Order, error) {
 	}
 	return orders, nil
 }
-
-//func (pg *PGSQLConn) CheckLastID(table string) (ID int64, err error) {
-//	ctx, cancel := context.WithTimeout(context.Background(), time.Second*10)
-//	defer cancel()
-//	f := func() (*sql.Rows, error) {
-//		rows, err := pg.DBConn.QueryContext(ctx, "SELECT ID FROM $1 ORDER BY ID DESC LIMIT 1", strings.ToUpper(table))
-//		if err != nil {
-//			return nil, err
-//		}
-//		if rows.Err() != nil {
-//			pg.Logger.Error().Err(err).Msg("error in rows")
-//			return nil, err
-//		}
-//		return rows, nil
-//	}
-//	var netErr net.Error
-//	rows, err := retryReadFunc(2, 3, f, &netErr)
-//	if err != nil {
-//		return 0, err
-//	}
-//	if rows.Err() != nil {
-//		pg.Logger.Error().Err(err).Msg("error in rows")
-//		return 0, err
-//	}
-//	UserID := int64(0)
-//	for rows.Next() {
-//		err = rows.Scan(&UserID)
-//		if err != nil {
-//			return 0, err
-//		}
-//	}
-//	err = rows.Close()
-//	if err != nil {
-//		pg.Logger.Error().Err(err).Msg("error when closing rows")
-//		return 0, err
-//	}
-//	return ID, nil
-//}
 
 func (pg *PGSQLConn) Ping() error {
 	ctx, cancel := context.WithTimeout(context.Background(), time.Second*10)
@@ -332,40 +248,27 @@ func retryWriteFunc(
 	return nil
 }
 
-func (pg *PGSQLConn) CheckUserCashback(userLogin string) (float64, float64, error) {
-	rows, err := pg.makeQueryContext("SELECT cashback FROM USERS WHERE login=$1", userLogin)
-	if err != nil {
-		pg.Logger.Error().Err(err).Msg("error when query userID from DB")
-		return 0, 0, err
-	}
-	if rows.Err() != nil {
-		pg.Logger.Error().Err(err).Msg("error in rows")
-		return 0, 0, err
-	}
+func (pg *PGSQLConn) CheckUserBalance(userLogin string) (float64, float64, error) {
+	row, cancel := pg.makeQueryRowCTX("SELECT cashback, withdrawn FROM USERS WHERE login=$1", userLogin)
+	defer cancel()
 	bal := Balance{}
-	for rows.Next() {
-		err := rows.Scan(bal.Current, bal.Withdrawn)
-		if err != nil {
-			return 0, 0, err
-		}
-	}
-	err = rows.Close()
+	err := row.Scan(&bal.Current, &bal.Withdrawn)
 	if err != nil {
-		pg.Logger.Error().Err(err).Msg("error when closing rows")
 		return 0, 0, err
 	}
 	return bal.Current, bal.Withdrawn, nil
 }
 
 func (pg *PGSQLConn) SubUserBalance(userLogin string, sum float64) (int64, error) {
-	current, _, err := pg.CheckUserCashback(userLogin)
+	current, _, err := pg.CheckUserBalance(userLogin)
 	if err != nil {
 		return 0, err
 	}
 	if current < sum {
 		return 0, fmt.Errorf("can't substract from balance, current=%f < order=%f", current, sum)
 	}
-	rows, err := pg.makeExecContext("UPDATE USERS SET cashback=$1 WHERE login=$2", current-sum, userLogin)
+	rows, cancel, err := pg.makeExecContext("UPDATE USERS SET cashback=cashback-$1, withdrawn=withdrawn+$1 WHERE login=$2", sum, userLogin)
+	defer cancel()
 	if err != nil {
 		return 0, err
 	}
@@ -373,27 +276,27 @@ func (pg *PGSQLConn) SubUserBalance(userLogin string, sum float64) (int64, error
 }
 
 func (pg *PGSQLConn) AddUserBalance(userLogin string, sum float64) (int64, error) {
-	current, allTime, err := pg.CheckUserCashback(userLogin)
+	rows, cancel, err := pg.makeExecContext("UPDATE USERS SET cashback=cashback+$1, cashback_all=cashback+$1 WHERE login=$2", sum, userLogin)
+	defer cancel()
 	if err != nil {
 		return 0, err
 	}
-	rows, err := pg.makeExecContext("UPDATE USERS SET cashback=$1, cashback_all=$2 WHERE login=$3", current+sum, allTime+sum, userLogin)
-	if err != nil {
-		return 0, err
-	}
+	fmt.Println(rows, userLogin, sum)
 	return rows, nil
 }
 
 func (pg *PGSQLConn) RegisterOrder(orderID string, accrual float64, placedAt string, login string) (int64, error) {
-	rows, err := pg.makeExecContext("INSERT INTO ORDERS (id,cashback,placed_at,login) VALUES ($1,$2,$3,$4)", orderID, accrual, placedAt, login)
+	rows, cancel, err := pg.makeExecContext("INSERT INTO ORDERS (id,cashback,placed_at,login,status) VALUES ($1,$2,$3,$4,$5)", orderID, accrual, placedAt, login, "NEW")
+	defer cancel()
 	if err != nil {
 		return 0, err
 	}
 	return rows, nil
 }
 
-func (pg *PGSQLConn) UpdateOrder(orderID string, accrual float64) (int64, error) {
-	rows, err := pg.makeExecContext("UPDATE ORDERS SET cashback=$1 WHERE id=$2", accrual, orderID)
+func (pg *PGSQLConn) UpdateOrder(orderID string, accrual float64, status string) (int64, error) {
+	rows, cancel, err := pg.makeExecContext("UPDATE ORDERS SET cashback=$1, status=$3 WHERE id=$2", accrual, orderID, status)
+	defer cancel()
 	if err != nil {
 		return 0, err
 	}
@@ -401,7 +304,8 @@ func (pg *PGSQLConn) UpdateOrder(orderID string, accrual float64) (int64, error)
 }
 
 func (pg *PGSQLConn) RegisterWithdraw(orderID string, sum float64, placedAt string, login string) (int64, error) {
-	rows, err := pg.makeExecContext("INSERT INTO WITHDRAWALS (order_id, sum ,placed_at, login) VALUES ($1,$2,$3,$4)", orderID, sum, placedAt, login)
+	rows, cancel, err := pg.makeExecContext("INSERT INTO WITHDRAWALS (order_id, sum ,placed_at, login) VALUES ($1,$2,$3,$4)", orderID, sum, placedAt, login)
+	defer cancel()
 	if err != nil {
 		return 0, err
 	}
@@ -413,7 +317,8 @@ func (pg *PGSQLConn) RegisterUser(login string, password string) (int64, error) 
 	if err != nil {
 		return 0, err
 	}
-	rows, err := pg.makeExecContext("INSERT INTO USERS (login,password,cashback,cashback_all) VALUES ($1,$2,$3,$4)", login, fmt.Sprintf("%x", hashedPass), 0, 0)
+	rows, cancel, err := pg.makeExecContext("INSERT INTO USERS (login,password,cashback,cashback_all,withdrawn) VALUES ($1,$2,$3,$4,$5)", login, fmt.Sprintf("%x", hashedPass), 0, 0, 0)
+	defer cancel()
 	if err != nil {
 		return 0, err
 	}
@@ -421,32 +326,18 @@ func (pg *PGSQLConn) RegisterUser(login string, password string) (int64, error) 
 }
 
 func (pg *PGSQLConn) CheckUserCreds(login string, plainPassword string) (bool, error) {
-	rows, err := pg.makeQueryContext("SELECT password FROM USERS WHERE LOGIN=$1", login)
+	row, cancel := pg.makeQueryRowCTX("SELECT password FROM USERS WHERE LOGIN=$1", login)
+	defer cancel()
+	var userHashedPwd string
+	err := row.Scan(&userHashedPwd)
 	if err != nil {
 		return false, err
 	}
-	if rows.Err() != nil {
-		pg.Logger.Error().Err(err).Msg("error in rows")
-		return false, err
-	}
-	var userHashedPwd string
-	for rows.Next() {
-		err = rows.Scan(&userHashedPwd)
-		if err != nil {
-			return false, err
-		}
-	}
-	fmt.Println(userHashedPwd)
 	if err != nil {
 		return false, err
 	}
 	if !CheckPasswordHash([]byte(userHashedPwd), []byte(plainPassword)) {
 		return false, nil
-	}
-	err = rows.Close()
-	if err != nil {
-		pg.Logger.Error().Err(err).Msg("error when closing rows")
-		return false, err
 	}
 	return true, nil
 }
