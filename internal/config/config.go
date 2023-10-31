@@ -8,11 +8,11 @@ import (
 )
 
 type SysConfig struct {
-	GmartAddr     string `env:"LOCAL_ADDR"`
-	CashbackAddr  string `env:"REMOTE_ADDR"`
-	DBConnString  string `env:"DBCONN_STRING"`
-	CheckInterval int64  `env:"CHECK_INTERVAL"`
-	HashKey       string `env:"HASH_KEY"`
+	GmartAddr    string `env:"RUN_ADDRESS"`
+	CashbackAddr string `env:"ACCRUAL_SYSTEM_ADDRESS"`
+	DBConnString string `env:"DATABASE_URI"`
+	//CheckInterval int64  `env:"CHECK_INTERVAL"`
+	//HashKey       string `env:"HASH_KEY"`
 }
 
 func (c *SysConfig) ParseStartupFlags() error {
@@ -24,19 +24,19 @@ func (c *SysConfig) ParseStartupFlags() error {
 		"localhost:8081",
 		"Address and port of cashback service string",
 	)
-	serverFlags.Int64Var(&c.CheckInterval, "int", 600, "Checking interval in seconds int")
+	//serverFlags.Int64Var(&c.CheckInterval, "int", 600, "Checking interval in seconds int")
 	serverFlags.StringVar(
 		&c.DBConnString,
 		"d",
 		"postgres://postgres:postgres@localhost:5432/postgres?sslmode=disable",
 		"DB connection string",
 	)
-	serverFlags.StringVar(
-		&c.HashKey,
-		"hkey",
-		"a01b02",
-		"Hash key",
-	)
+	//serverFlags.StringVar(
+	//	&c.HashKey,
+	//	"hkey",
+	//	"a01b02",
+	//	"Hash key",
+	//)
 	if err := serverFlags.Parse(os.Args[1:]); err != nil {
 		os.Exit(1)
 		return err
