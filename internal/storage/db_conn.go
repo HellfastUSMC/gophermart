@@ -167,6 +167,11 @@ func (pg *PGSQLConn) GetUserOrders(login string) ([]Order, error) {
 		}
 		orders = append(orders, order)
 	}
+	err = rows.Err()
+	if err != nil {
+		pg.Logger.Error().Err(err).Msg("error in rows")
+		return nil, err
+	}
 	err = rows.Close()
 	if err != nil {
 		pg.Logger.Error().Err(err).Msg("error when closing rows")
@@ -333,11 +338,9 @@ func (pg *PGSQLConn) CheckUserCreds(login string, plainPassword string) (bool, e
 	if err != nil {
 		return false, err
 	}
-	if err != nil {
+	answer, err := CheckPasswordHash([]byte(userHashedPwd), []byte(plainPassword))
+	if err != nil || !answer {
 		return false, err
-	}
-	if !CheckPasswordHash([]byte(userHashedPwd), []byte(plainPassword)) {
-		return false, nil
 	}
 	return true, nil
 }

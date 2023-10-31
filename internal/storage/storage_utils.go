@@ -5,6 +5,7 @@ import (
 	"database/sql"
 	"encoding/json"
 	"fmt"
+	"github.com/rs/zerolog/log"
 	"io"
 	"net/http"
 	"time"
@@ -67,16 +68,16 @@ func CheckOrderStatus(orderID string, cashbackAddr string, log logger.CLogger, p
 
 func PasswordHasher(plainPass string) ([]byte, error) {
 	bytes, err := bcrypt.GenerateFromPassword([]byte(plainPass), bcrypt.DefaultCost)
-	fmt.Println(fmt.Sprintf("%x", bytes))
 	return bytes, err
 }
 
-func CheckPasswordHash(password, hash []byte) bool {
+func CheckPasswordHash(password, hash []byte) (bool, error) {
 	err := bcrypt.CompareHashAndPassword(hash, password)
 	if err != nil {
-
+		log.Error().Msg("error compare passwords")
+		return false, err
 	}
-	return true
+	return true, nil
 }
 
 func NewConnectionPGSQL(connPath string, logger logger.CLogger) (*PGSQLConn, error) {

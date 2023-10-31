@@ -62,9 +62,9 @@ func main() {
 	router := chi.NewRouter()
 	router.Mount("/", controller.Route())
 	log.Info().Msg(fmt.Sprintf(
-		"Starting server at %s with check interval %ds, DB path %s and remote addr %s",
+		"Starting server at %s with check interval none, DB path %s and remote addr %s",
 		controller.Config.GmartAddr,
-		controller.Config.CheckInterval,
+		//controller.Config.CheckInterval,
 		controller.Config.DBConnString,
 		controller.Config.CashbackAddr,
 	))
