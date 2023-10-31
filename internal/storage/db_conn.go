@@ -6,6 +6,8 @@ import (
 	"embed"
 	"errors"
 	"fmt"
+	"github.com/rs/zerolog/log"
+	"golang.org/x/crypto/bcrypt"
 	"net"
 	"time"
 
@@ -41,6 +43,7 @@ func (pg *PGSQLConn) makeQueryContext(query string, args ...any) (*sql.Rows, con
 	}
 	var netErr net.Error
 	rows, err := retryReadFunc(2, 3, f, &netErr)
+	fmt.Println(rows.NextResultSet(), query, args)
 	if err != nil {
 		return nil, cancel, err
 	}
@@ -105,7 +108,7 @@ func (pg *PGSQLConn) GetUserWithdrawals(login string) ([]Withdraw, error) {
 	fmt.Println(rows.NextResultSet())
 	for rows.Next() {
 		fmt.Println("scan...")
-		err := rows.Scan(&withdraw.ID, &withdraw.OrderID, &withdraw.Sum, &withdraw.ProcessedAt, &withdraw.Login)
+		err := rows.Scan(&withdraw.ID, &withdraw.OrderID, &withdraw.Sum, &withdraw.ProcessedAt)
 		if err != nil {
 			pg.Logger.Error().Err(err).Msg("error when scanning rows")
 			return nil, err
@@ -131,7 +134,6 @@ func (pg *PGSQLConn) GetUserWithdrawals(login string) ([]Withdraw, error) {
 
 func (pg *PGSQLConn) makeQueryRowCTX(query string, args ...any) (*sql.Row, context.CancelFunc) {
 	ctx, cancel := context.WithTimeout(context.Background(), time.Second*30)
-	//defer cancel()
 	row := pg.DBConn.QueryRowContext(ctx, query, args...)
 	return row, cancel
 }
@@ -322,7 +324,7 @@ func (pg *PGSQLConn) RegisterUser(login string, password string) (int64, error) 
 	if err != nil {
 		return 0, err
 	}
-	rows, cancel, err := pg.makeExecContext("INSERT INTO USERS (login,password,cashback,cashback_all,withdrawn) VALUES ($1,$2,$3,$4,$5)", login, fmt.Sprintf("%x", hashedPass), 0, 0, 0)
+	rows, cancel, err := pg.makeExecContext("INSERT INTO USERS (login,password,cashback,cashback_all,withdrawn) VALUES ($1,$2,$3,$4,$5)", login, fmt.Sprintf("%s", hashedPass), 0, 0, 0)
 	defer cancel()
 	if err != nil {
 		return 0, err
@@ -338,8 +340,10 @@ func (pg *PGSQLConn) CheckUserCreds(login string, plainPassword string) (bool, e
 	if err != nil {
 		return false, err
 	}
-	answer, err := CheckPasswordHash([]byte(userHashedPwd), []byte(plainPassword))
-	if err != nil || !answer {
+
+	err = bcrypt.CompareHashAndPassword([]byte(userHashedPwd), []byte(plainPassword))
+	if err != nil {
+		log.Error().Err(err).Msg("error compare passwords")
 		return false, err
 	}
 	return true, nil

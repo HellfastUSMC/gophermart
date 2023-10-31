@@ -158,7 +158,7 @@ func (c *GmartController) postOrder(res http.ResponseWriter, req *http.Request) 
 	r, err := http.NewRequestWithContext(
 		ctx,
 		http.MethodGet,
-		fmt.Sprintf("http://%s/api/orders/%s", c.Config.CashbackAddr, string(body)),
+		fmt.Sprintf("%s/api/orders/%s", c.Config.CashbackAddr, string(body)),
 		nil,
 	)
 	if err != nil {

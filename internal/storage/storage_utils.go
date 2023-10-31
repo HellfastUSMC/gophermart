@@ -21,7 +21,7 @@ func CheckOrderStatus(orderID string, cashbackAddr string, log logger.CLogger, p
 	r, err := http.NewRequestWithContext(
 		ctx,
 		http.MethodGet,
-		fmt.Sprintf("http://%s/api/orders/%s", cashbackAddr, orderID),
+		fmt.Sprintf("//%s/api/orders/%s", cashbackAddr, orderID),
 		nil,
 	)
 	if err != nil {
@@ -74,7 +74,7 @@ func PasswordHasher(plainPass string) ([]byte, error) {
 func CheckPasswordHash(password, hash []byte) (bool, error) {
 	err := bcrypt.CompareHashAndPassword(hash, password)
 	if err != nil {
-		log.Error().Msg("error compare passwords")
+		log.Error().Err(err).Msg("error compare passwords")
 		return false, err
 	}
 	return true, nil
