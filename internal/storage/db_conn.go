@@ -6,13 +6,12 @@ import (
 	"embed"
 	"errors"
 	"fmt"
-	"github.com/rs/zerolog/log"
-	"golang.org/x/crypto/bcrypt"
 	"net"
 	"time"
 
 	"github.com/HellfastUSMC/gophermart/internal/logger"
 	_ "github.com/jackc/pgx/v5/stdlib"
+	"golang.org/x/crypto/bcrypt"
 )
 
 //go:embed migrations/*.sql
@@ -43,7 +42,6 @@ func (pg *PGSQLConn) makeQueryContext(query string, args ...any) (*sql.Rows, con
 	}
 	var netErr net.Error
 	rows, err := retryReadFunc(2, 3, f, &netErr)
-	fmt.Println(rows.NextResultSet(), query, args)
 	if err != nil {
 		return nil, cancel, err
 	}
@@ -52,7 +50,6 @@ func (pg *PGSQLConn) makeQueryContext(query string, args ...any) (*sql.Rows, con
 
 func (pg *PGSQLConn) makeExecContext(query string, args ...any) (int64, context.CancelFunc, error) {
 	ctx, cancel := context.WithTimeout(context.Background(), time.Second*30)
-	//defer cancel()
 	res, err := pg.DBConn.ExecContext(ctx, query, args...)
 	if err != nil {
 		pg.Logger.Error().Err(err).Msg("error when query from DB")
@@ -65,21 +62,6 @@ func (pg *PGSQLConn) makeExecContext(query string, args ...any) (int64, context.
 	}
 	return rows, cancel, nil
 }
-
-//func (pg *PGSQLConn) CheckOrderIDExists(orderID int64) (bool, error) {
-//	rows, cancel := pg.makeQueryRowCTX("SELECT * FROM ORDERS WHERE id=$1", orderID)
-//	defer cancel()
-//	var orderIDDB int64
-//	err := rows.Scan(&orderIDDB)
-//	if err != nil {
-//		pg.Logger.Error().Err(err).Msg("error when scanning orderID from rows")
-//		return false, err
-//	}
-//	if orderIDDB != 0 {
-//		return true, nil
-//	}
-//	return false, nil
-//}
 
 func (pg *PGSQLConn) GetUserBalance(login string) (float64, float64, error) {
 	row, cancel := pg.makeQueryRowCTX("SELECT cashback, withdrawn FROM USERS WHERE login=$1", login)
@@ -96,7 +78,6 @@ func (pg *PGSQLConn) GetUserBalance(login string) (float64, float64, error) {
 
 func (pg *PGSQLConn) GetUserWithdrawals(login string) ([]Withdraw, error) {
 	rows, cancel, err := pg.makeQueryContext("SELECT * FROM WITHDRAWALS WHERE login=$1 ORDER BY placed_at", login)
-	fmt.Println("Login -", login)
 	if err != nil {
 		pg.Logger.Error().Err(err).Msg("error when query user withdraws from DB")
 		return nil, err
@@ -105,16 +86,13 @@ func (pg *PGSQLConn) GetUserWithdrawals(login string) ([]Withdraw, error) {
 		withdrawals []Withdraw
 		withdraw    Withdraw
 	)
-	fmt.Println(rows.NextResultSet())
 	for rows.Next() {
-		fmt.Println("scan...")
-		err := rows.Scan(&withdraw.ID, &withdraw.OrderID, &withdraw.Sum, &withdraw.ProcessedAt)
+		err := rows.Scan(&withdraw.ID, &withdraw.OrderID, &withdraw.Sum, &withdraw.ProcessedAt, &withdraw.Login)
 		if err != nil {
 			pg.Logger.Error().Err(err).Msg("error when scanning rows")
 			return nil, err
 		}
 		withdrawals = append(withdrawals, withdraw)
-		fmt.Println(withdraw, withdrawals)
 	}
 	if rows.Err() != nil {
 		pg.Logger.Error().Err(err).Msg("error in rows")
@@ -288,7 +266,6 @@ func (pg *PGSQLConn) AddUserBalance(userLogin string, sum float64) (int64, error
 	if err != nil {
 		return 0, err
 	}
-	fmt.Println(rows, userLogin, sum)
 	return rows, nil
 }
 
@@ -324,7 +301,7 @@ func (pg *PGSQLConn) RegisterUser(login string, password string) (int64, error) 
 	if err != nil {
 		return 0, err
 	}
-	rows, cancel, err := pg.makeExecContext("INSERT INTO USERS (login,password,cashback,cashback_all,withdrawn) VALUES ($1,$2,$3,$4,$5)", login, fmt.Sprintf("%s", hashedPass), 0, 0, 0)
+	rows, cancel, err := pg.makeExecContext("INSERT INTO USERS (login,password,cashback,cashback_all,withdrawn) VALUES ($1,$2,$3,$4,$5)", login, string(hashedPass), 0, 0, 0)
 	defer cancel()
 	if err != nil {
 		return 0, err
@@ -343,7 +320,7 @@ func (pg *PGSQLConn) CheckUserCreds(login string, plainPassword string) (bool, e
 
 	err = bcrypt.CompareHashAndPassword([]byte(userHashedPwd), []byte(plainPassword))
 	if err != nil {
-		log.Error().Err(err).Msg("error compare passwords")
+		pg.Logger.Error().Err(err).Msg("error compare passwords")
 		return false, err
 	}
 	return true, nil

@@ -9,10 +9,6 @@ import (
 	"github.com/HellfastUSMC/gophermart/internal/storage"
 )
 
-//type CHRespWriter struct {
-//	http.ResponseWriter
-//}
-
 func CheckAuth(log logger.CLogger, tokens map[string]storage.Token) func(h http.Handler) http.Handler {
 	return func(h http.Handler) http.Handler {
 		return http.HandlerFunc(func(res http.ResponseWriter, req *http.Request) {
@@ -28,11 +24,11 @@ func CheckAuth(log logger.CLogger, tokens map[string]storage.Token) func(h http.
 						return
 					}
 				}
-				log.Error().Err(fmt.Errorf("auth error")).Msg(fmt.Sprintf("Somebody tried to open %s with none credentials", req.URL.String()))
+				log.Error().Err(fmt.Errorf("auth error")).Msg(fmt.Sprintf("Somebody tried to open %s with wrong credentials", req.URL.String()))
 				http.Error(res, "Credentials are missing", http.StatusUnauthorized)
 				return
 			} else {
-				log.Error().Err(fmt.Errorf("auth error")).Msg(fmt.Sprintf("Somebody tried to open %s with none credentials", req.URL.String()))
+				log.Error().Err(fmt.Errorf("auth error")).Msg(fmt.Sprintf("Somebody tried to open %s with wrong credentials", req.URL.String()))
 				http.Error(res, "Credentials are missing", http.StatusUnauthorized)
 				return
 			}

@@ -35,7 +35,7 @@ type UserCred struct {
 }
 
 type Order struct {
-	ID      string  `json:"order"`
+	ID      string  `json:"number"`
 	Status  string  `json:"status"`
 	Accrual float64 `json:"accrual"`
 	Date    string  `json:"uploaded_at"`

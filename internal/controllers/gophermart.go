@@ -30,9 +30,6 @@ func (c *GmartController) Route() *chi.Mux {
 	router := chi.NewRouter()
 	router.Use(middlewares.CheckAuth(c.Logger, c.Storage.Tokens))
 	router.Use(middlewares.RequestPrinter(c.Logger))
-	//router.Route("/api/status", func(rout chi.Router) {
-	//	router.Get("/", c.getStatus)
-	//})
 	router.Route("/api/user", func(router chi.Router) {
 		router.Get("/orders", c.getUserOrders)
 		router.Get("/balance", c.getUserBalance)
@@ -87,17 +84,6 @@ func (c *GmartController) CheckTokens() {
 			delete(c.Storage.Tokens, key)
 		}
 	}
-}
-
-func (c *GmartController) CheckOrder() error {
-	for _, val := range c.Storage.Orders {
-		err := storage.CheckOrderStatus(val.ID, c.Config.CashbackAddr, c.Logger, c.Storage.PGConn)
-		if err != nil {
-			c.Logger.Error().Err(err).Msg("error in checking order status")
-			return err
-		}
-	}
-	return nil
 }
 
 func (c *GmartController) postOrder(res http.ResponseWriter, req *http.Request) {
@@ -178,7 +164,6 @@ func (c *GmartController) postOrder(res http.ResponseWriter, req *http.Request) 
 		log.Error().Err(err).Msg("error in rows")
 		http.Error(res, "error in rows", http.StatusInternalServerError)
 	}
-	fmt.Println(string(rBody), "CB response", response.StatusCode)
 	if response.StatusCode == http.StatusNoContent {
 		log.Error().Err(err).Msg("order not registered in cashback service")
 		http.Error(res, "order not registered in cashback service", http.StatusAccepted)
@@ -191,7 +176,6 @@ func (c *GmartController) postOrder(res http.ResponseWriter, req *http.Request) 
 		http.Error(res, "error in unmarshal response body", http.StatusInternalServerError)
 		return
 	}
-	fmt.Println(order)
 	err = response.Body.Close()
 	if err != nil {
 		log.Error().Err(err).Msg("error in closing response body")
@@ -369,9 +353,7 @@ func (c *GmartController) getUserWithdrawals(res http.ResponseWriter, req *http.
 func (c *GmartController) getUserBalance(res http.ResponseWriter, req *http.Request) {
 	token := req.Header.Get("Authorization")
 	login := c.findLoginByToken(token)
-	fmt.Println(token, login)
 	balance, withdrawn, err := c.Storage.PGConn.GetUserBalance(login)
-	fmt.Println(balance)
 	if err != nil {
 		log.Error().Err(err).Msg("cannot get user balance")
 		http.Error(res, "cannot get user balance", http.StatusInternalServerError)
@@ -405,6 +387,79 @@ func (c *GmartController) findLoginByToken(token string) string {
 		}
 	}
 	return ""
+}
+
+func (c *GmartController) CheckOrders() error {
+	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	defer cancel()
+	rows, err := c.Storage.PGConn.DBConn.QueryContext(ctx, "SELECT * FROM orders WHERE status!='INVALID' AND status!='PROCESSED'")
+	if err != nil {
+		return err
+	}
+	if err := rows.Err(); err != nil {
+		return err
+	}
+	var orders []storage.Order
+	for rows.Next() {
+		var order storage.Order
+		err = rows.Scan(&order.ID, &order.Accrual, &order.Date, &order.Login, &order.Status)
+		if err != nil {
+			return err
+		}
+		orders = append(orders, order)
+	}
+	for _, val := range orders {
+		ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+		defer cancel()
+		r, err := http.NewRequestWithContext(
+			ctx,
+			http.MethodGet,
+			fmt.Sprintf("%s/api/orders/%s", c.Config.CashbackAddr, val.ID),
+			nil,
+		)
+		if err != nil {
+			return err
+		}
+		client := &http.Client{}
+		response, err := client.Do(r)
+		if err != nil {
+			c.Logger.Error().Err(err).Msg("error in sending request request to CB")
+			return err
+		}
+		rBody, err := io.ReadAll(response.Body)
+		if err != nil {
+			return err
+		}
+		order := storage.Order{}
+		if response.StatusCode == http.StatusOK {
+			err = json.Unmarshal(rBody, &order)
+			if err != nil {
+				c.Logger.Error().Err(err).Msg("error in unmarshal response body")
+				return err
+			}
+			_, err = c.Storage.PGConn.UpdateOrder(val.ID, order.Accrual, order.Status)
+			c.Logger.Info().Msg(fmt.Sprintf("order %s updated with status %s", order.ID, order.Status))
+			if err != nil {
+				c.Logger.Error().Err(err).Msg("cannot update order to DB")
+				return err
+			}
+		} else if response.StatusCode == http.StatusNoContent {
+			_, err = c.Storage.PGConn.UpdateOrder(val.ID, val.Accrual, "INVALID")
+			if err != nil {
+				c.Logger.Error().Err(err).Msg("cannot update order to DB")
+				return err
+			}
+		} else {
+			return fmt.Errorf("CB service returned status %d", response.StatusCode)
+		}
+
+		err = response.Body.Close()
+		if err != nil {
+			c.Logger.Error().Err(err).Msg("cannot close response body")
+			return err
+		}
+	}
+	return nil
 }
 
 func (c *GmartController) getUserOrders(res http.ResponseWriter, req *http.Request) {
@@ -461,30 +516,6 @@ func (c *GmartController) getStatus(res http.ResponseWriter, req *http.Request) 
 		return
 	}
 }
-
-//func (c *GmartController) RenewStatus() error {
-//	c.PingCB()
-//	c.PingDB()
-//	userID, err := c.Storage.PGConn.CheckLastID("USERS")
-//	if err != nil {
-//		c.Logger.Error().Err(err).Msg("error in last user ID")
-//		return err
-//	}
-//	c.Storage.Status.LastUserID = userID
-//	orderID, err := c.Storage.PGConn.CheckLastID("ORDERS")
-//	if err != nil {
-//		c.Logger.Error().Err(err).Msg("error in last order ID")
-//		return err
-//	}
-//	c.Storage.Status.LastOrderID = orderID
-//	itemID, err := c.Storage.PGConn.CheckLastID("ITEMS")
-//	if err != nil {
-//		c.Logger.Error().Err(err).Msg("error in last item ID")
-//		return err
-//	}
-//	c.Storage.Status.LastItemID = itemID
-//	return nil
-//}
 
 func (c *GmartController) PingDB() {
 	if err := c.Storage.PGConn.Ping(); err != nil {

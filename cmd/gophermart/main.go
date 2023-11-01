@@ -28,9 +28,8 @@ func main() {
 	}
 	store := storage.NewStorage(dbConn, currentStats, &log)
 	controller := controllers.NewGmartController(&log, conf, store)
-	//tickCheckStatus := time.NewTicker(time.Duration(conf.CheckInterval) * time.Second)
 	tickCheckTokens := time.NewTicker(1 * time.Hour)
-	tickCheckOrders := time.NewTicker(1 * time.Second)
+	tickCheckCashback := time.NewTicker(1 * time.Second)
 	go func() {
 		defer runtime.Goexit()
 		for {
@@ -41,30 +40,18 @@ func main() {
 	go func() {
 		defer runtime.Goexit()
 		for {
-			<-tickCheckOrders.C
-			err := controller.CheckOrder()
+			<-tickCheckCashback.C
+			err := controller.CheckOrders()
 			if err != nil {
-				log.Error().Err(err).Msg("error in checking orders")
+				log.Error().Err(err).Msg("error when update orders")
 			}
 		}
 	}()
-	//go func() {
-	//	defer runtime.Goexit()
-	//	for {
-	//		<-tickCheckStatus.C
-	//		err := controller.RenewStatus()
-	//		if err != nil {
-	//			log.Error().Err(err).Msg("error in status renew")
-	//		}
-	//		log.Info().Msg("status renewed")
-	//	}
-	//}()
 	router := chi.NewRouter()
 	router.Mount("/", controller.Route())
 	log.Info().Msg(fmt.Sprintf(
 		"Starting server at %s with check interval none, DB path %s and remote addr %s",
 		controller.Config.GmartAddr,
-		//controller.Config.CheckInterval,
 		controller.Config.DBConnString,
 		controller.Config.CashbackAddr,
 	))

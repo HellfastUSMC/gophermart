@@ -3,15 +3,11 @@ package middlewares
 import (
 	"bytes"
 	"fmt"
-	"github.com/HellfastUSMC/gophermart/internal/logger"
 	"io"
 	"net/http"
-)
 
-//
-//type CHRespWriter struct {
-//	http.ResponseWriter
-//}
+	"github.com/HellfastUSMC/gophermart/internal/logger"
+)
 
 func RequestPrinter(log logger.CLogger) func(h http.Handler) http.Handler {
 	return func(h http.Handler) http.Handler {
