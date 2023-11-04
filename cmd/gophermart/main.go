@@ -2,7 +2,6 @@ package main
 
 import (
 	"fmt"
-	"github.com/go-chi/chi/v5"
 	"net/http"
 	"os"
 	"runtime"
@@ -13,6 +12,7 @@ import (
 	"github.com/HellfastUSMC/gophermart/internal/controllers"
 	"github.com/HellfastUSMC/gophermart/internal/database_connector"
 	"github.com/HellfastUSMC/gophermart/internal/storage"
+	"github.com/go-chi/chi/v5"
 	"github.com/rs/zerolog"
 )
 
@@ -22,7 +22,6 @@ func main() {
 	if err != nil {
 		log.Error().Err(err).Msg("config create error")
 	}
-	//currentStats := storage.NewCurrentStats()
 	dbConn, err := dbconnector.NewConnectionPGSQL(conf.DBConnString, &log)
 	if err != nil {
 		log.Error().Err(err).Msg("DB connection error")
@@ -67,7 +66,7 @@ func main() {
 	router := chi.NewRouter()
 	router.Mount("/", controller.Route())
 	log.Info().Msg(fmt.Sprintf(
-		"Starting server at %s with check interval none, DB path %s and remote addr %s",
+		"Starting server at %s, DB path %s and remote addr %s",
 		controller.Config.GetServiceAddress(),
 		controller.Config.GetDBPath(),
 		controller.Config.GetCBPath(),

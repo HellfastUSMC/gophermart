@@ -7,7 +7,6 @@ import (
 )
 
 type Storage struct {
-	//Status *CurrentStats
 	Logger logger.Logger
 	Tokens map[string]Token
 	Orders map[int64]Order
@@ -21,7 +20,6 @@ type Token struct {
 
 func NewStorage(Logger logger.Logger) *Storage {
 	return &Storage{
-		//Status: Status,
 		Logger: Logger,
 		Tokens: make(map[string]Token),
 	}
@@ -39,14 +37,6 @@ type Order struct {
 	Date    string  `json:"uploaded_at"`
 	Login   string  `json:"-"`
 }
-
-//type User struct {
-//	ID              int64   `json:"id"`
-//	Login           int64   `json:"phone"`
-//	Password        string  `json:"-"`
-//	Cashback        float64 `json:"cashback"`
-//	AllTimeCashback float64 `json:"all_time_cashback"`
-//}
 
 type Balance struct {
 	Current   float64 `json:"current"`

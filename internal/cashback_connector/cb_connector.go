@@ -51,10 +51,12 @@ func (c *CBConnector) CheckOrder(orderID string) (storage.Order, int, error) {
 	if err != nil {
 		c.Logger.Error().Err(err).Msg("error in rows")
 	}
-	err = json.Unmarshal(rBody, &order)
-	if err != nil {
-		c.Logger.Error().Err(err).Msg("error in unmarshal response body")
-		return order, response.StatusCode, err
+	if response.StatusCode == http.StatusOK {
+		err = json.Unmarshal(rBody, &order)
+		if err != nil {
+			c.Logger.Error().Err(err).Msg("error in unmarshal response body")
+			return order, response.StatusCode, err
+		}
 	}
 	err = response.Body.Close()
 	if err != nil {

@@ -8,7 +8,3 @@ func PasswordHasher(plainPass string) ([]byte, error) {
 	bytes, err := bcrypt.GenerateFromPassword([]byte(plainPass), bcrypt.DefaultCost)
 	return bytes, err
 }
-
-func StatusChecker() {
-
-}
