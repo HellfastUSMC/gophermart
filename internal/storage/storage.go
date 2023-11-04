@@ -3,13 +3,12 @@ package storage
 import (
 	"time"
 
-	"github.com/HellfastUSMC/gophermart/internal/logger"
+	"github.com/HellfastUSMC/gophermart/internal/interfaces"
 )
 
 type Storage struct {
-	PGConn *PGSQLConn
-	Status *CurrentStats
-	Logger logger.CLogger
+	//Status *CurrentStats
+	Logger interfaces.Logger
 	Tokens map[string]Token
 	Orders map[int64]Order
 }
@@ -20,11 +19,10 @@ type Token struct {
 	Token   string
 }
 
-func NewStorage(PGConn *PGSQLConn, Status *CurrentStats, cLogger logger.CLogger) *Storage {
+func NewStorage(Logger interfaces.Logger) *Storage {
 	return &Storage{
-		PGConn: PGConn,
-		Status: Status,
-		Logger: cLogger,
+		//Status: Status,
+		Logger: Logger,
 		Tokens: make(map[string]Token),
 	}
 }
@@ -42,13 +40,13 @@ type Order struct {
 	Login   string  `json:"-"`
 }
 
-type User struct {
-	ID              int64   `json:"id"`
-	Login           int64   `json:"phone"`
-	Password        string  `json:"-"`
-	Cashback        float64 `json:"cashback"`
-	AllTimeCashback float64 `json:"all_time_cashback"`
-}
+//type User struct {
+//	ID              int64   `json:"id"`
+//	Login           int64   `json:"phone"`
+//	Password        string  `json:"-"`
+//	Cashback        float64 `json:"cashback"`
+//	AllTimeCashback float64 `json:"all_time_cashback"`
+//}
 
 type Balance struct {
 	Current   float64 `json:"current"`
@@ -63,20 +61,17 @@ type Withdraw struct {
 	Login       string  `json:"-"`
 }
 
-type CurrentStats struct {
-	LastOrderID  int64 `json:"last_order_id"`
-	LastUserID   int64 `json:"last_user_id"`
-	LastItemID   int64 `json:"last_item_id"`
-	DBConn       bool  `json:"db_conn"`
-	CashbackServ bool  `json:"cashback_serv"`
-}
+//type CurrentStats struct {
+//	DBConn       bool `json:"db_conn"`
+//	CashbackServ bool `json:"cashback_serv"`
+//}
 
-func NewCurrentStats() *CurrentStats {
-	return &CurrentStats{
-		LastUserID:   0,
-		LastOrderID:  0,
-		LastItemID:   0,
-		DBConn:       false,
-		CashbackServ: false,
-	}
-}
+//func NewCurrentStats() *CurrentStats {
+//	return &CurrentStats{
+//		LastUserID:   0,
+//		LastOrderID:  0,
+//		LastItemID:   0,
+//		DBConn:       false,
+//		CashbackServ: false,
+//	}
+//}

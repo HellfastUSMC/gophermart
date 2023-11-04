@@ -2,15 +2,17 @@ package main
 
 import (
 	"fmt"
+	"github.com/go-chi/chi/v5"
 	"net/http"
 	"os"
 	"runtime"
 	"time"
 
+	"github.com/HellfastUSMC/gophermart/internal/cashback_connector"
 	"github.com/HellfastUSMC/gophermart/internal/config"
 	"github.com/HellfastUSMC/gophermart/internal/controllers"
+	"github.com/HellfastUSMC/gophermart/internal/database_connector"
 	"github.com/HellfastUSMC/gophermart/internal/storage"
-	"github.com/go-chi/chi/v5"
 	"github.com/rs/zerolog"
 )
 
@@ -20,14 +22,15 @@ func main() {
 	if err != nil {
 		log.Error().Err(err).Msg("config create error")
 	}
-	currentStats := storage.NewCurrentStats()
-	dbConn, err := storage.NewConnectionPGSQL(conf.DBConnString, &log)
+	//currentStats := storage.NewCurrentStats()
+	dbConn, err := dbConnector.NewConnectionPGSQL(conf.DBConnString, &log)
 	if err != nil {
 		log.Error().Err(err).Msg("DB connection error")
 		return
 	}
-	store := storage.NewStorage(dbConn, currentStats, &log)
-	controller := controllers.NewGmartController(&log, conf, store)
+	store := storage.NewStorage(&log)
+	cbConn := cbConnector.NewCBConnector(&log, conf.CashbackAddr)
+	controller := controllers.NewGmartController(&log, conf, store, dbConn, cbConn)
 	tickCheckTokens := time.NewTicker(1 * time.Hour)
 	tickCheckCashback := time.NewTicker(1 * time.Second)
 	go func() {
@@ -41,21 +44,26 @@ func main() {
 		defer runtime.Goexit()
 		for {
 			<-tickCheckCashback.C
-			err := controller.CheckOrders()
+			orders, err := controller.PGConn.GetOrdersToCheck()
 			if err != nil {
-				log.Error().Err(err).Msg("error when update orders")
+				log.Error().Err(err).Msg("error when get orders to update")
 			}
+			err = controller.Cashback.CheckOrders(orders, controller.PGConn.UpdateOrder)
+			if err != nil {
+				log.Error().Err(err).Msg("error when check orders")
+			}
+
 		}
 	}()
 	router := chi.NewRouter()
 	router.Mount("/", controller.Route())
 	log.Info().Msg(fmt.Sprintf(
 		"Starting server at %s with check interval none, DB path %s and remote addr %s",
-		controller.Config.GmartAddr,
-		controller.Config.DBConnString,
-		controller.Config.CashbackAddr,
+		controller.Config.GetServiceAddress(),
+		controller.Config.GetDBPath(),
+		controller.Config.GetCBPath(),
 	))
-	err = http.ListenAndServe(controller.Config.GmartAddr, controller.Route())
+	err = http.ListenAndServe(controller.Config.GetServiceAddress(), controller.Route())
 	if err != nil {
 		log.Error().Err(err)
 	}

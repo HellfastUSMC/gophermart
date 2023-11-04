@@ -34,7 +34,15 @@ func (c *SysConfig) ParseStartupFlags() error {
 	}
 	return nil
 }
-
+func (c *SysConfig) GetCBPath() string {
+	return c.CashbackAddr
+}
+func (c *SysConfig) GetDBPath() string {
+	return c.DBConnString
+}
+func (c *SysConfig) GetServiceAddress() string {
+	return c.GmartAddr
+}
 func newConfig() (*SysConfig, error) {
 	config := SysConfig{}
 	return &config, nil
