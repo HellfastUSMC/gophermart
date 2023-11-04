@@ -43,7 +43,7 @@ type Balance struct {
 	Withdrawn float64 `json:"withdrawn"`
 }
 
-type Withdraw struct {
+type Bonus struct {
 	ID          int64   `json:"-"`
 	OrderID     string  `json:"order"`
 	Sum         float64 `json:"sum"`

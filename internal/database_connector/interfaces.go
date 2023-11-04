@@ -5,7 +5,7 @@ import "github.com/HellfastUSMC/gophermart/internal/storage"
 type DBConnector interface {
 	Close() error
 	GetUserBalance(login string) (float64, float64, error)
-	GetUserWithdrawals(login string) ([]storage.Withdraw, error)
+	GetUserWithdrawals(login string) ([]storage.Bonus, error)
 	GetOrder(order string) (storage.Order, error)
 	GetUserOrders(login string) ([]storage.Order, error)
 	Ping() error

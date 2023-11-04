@@ -73,7 +73,7 @@ func (c *GmartController) withdrawFromBalance(res http.ResponseWriter, req *http
 		http.Error(res, "cannot read request body", http.StatusInternalServerError)
 		return
 	}
-	withdraw := storage.Withdraw{}
+	withdraw := storage.Bonus{}
 	err = json.Unmarshal(body, &withdraw)
 	if err != nil {
 		c.Logger.Error().Err(err).Msg("cannot unmarshal request body")

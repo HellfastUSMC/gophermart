@@ -78,15 +78,15 @@ func (pg *PGSQLConn) GetUserBalance(login string) (float64, float64, error) {
 	return balance, withdrawn, nil
 }
 
-func (pg *PGSQLConn) GetUserWithdrawals(login string) ([]storage.Withdraw, error) {
+func (pg *PGSQLConn) GetUserWithdrawals(login string) ([]storage.Bonus, error) {
 	rows, cancel, err := pg.makeQueryContext("SELECT id,order_id,sum,placed_at,login FROM BONUSES WHERE login=$1 AND sub=true ORDER BY placed_at", login)
 	if err != nil {
 		pg.Logger.Error().Err(err).Msg("error when query user withdraws from DB")
 		return nil, err
 	}
 	var (
-		withdrawals []storage.Withdraw
-		withdraw    storage.Withdraw
+		withdrawals []storage.Bonus
+		withdraw    storage.Bonus
 	)
 	for rows.Next() {
 		err := rows.Scan(&withdraw.ID, &withdraw.OrderID, &withdraw.Sum, &withdraw.ProcessedAt, &withdraw.Login)
