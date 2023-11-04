@@ -79,7 +79,7 @@ func (pg *PGSQLConn) GetUserBalance(login string) (float64, float64, error) {
 }
 
 func (pg *PGSQLConn) GetUserWithdrawals(login string) ([]storage.Withdraw, error) {
-	rows, cancel, err := pg.makeQueryContext("SELECT * FROM WITHDRAWALS WHERE login=$1 ORDER BY placed_at", login)
+	rows, cancel, err := pg.makeQueryContext("SELECT * FROM BONUSES WHERE login=$1 and sum<0 ORDER BY placed_at", login)
 	if err != nil {
 		pg.Logger.Error().Err(err).Msg("error when query user withdraws from DB")
 		return nil, err
@@ -300,9 +300,12 @@ func (pg *PGSQLConn) UpdateOrder(orderID string, accrual float64, status string)
 	return rows, nil
 }
 
-func (pg *PGSQLConn) RegisterWithdraw(orderID string, sum float64, placedAt string, login string) (int64, error) {
+func (pg *PGSQLConn) RegisterBonusChange(orderID string, sum float64, placedAt string, login string, sub bool) (int64, error) {
+	if sub {
+		sum -= sum * 2
+	}
 	rows, cancel, err := pg.makeExecContext(
-		"INSERT INTO WITHDRAWALS (order_id, sum ,placed_at, login) VALUES ($1,$2,$3,$4)",
+		"INSERT INTO BONUSES (order_id, sum ,placed_at, login) VALUES ($1,$2,$3,$4)",
 		orderID, sum, placedAt, login,
 	)
 	defer cancel()

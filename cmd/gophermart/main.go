@@ -30,9 +30,11 @@ func main() {
 	}
 	store := storage.NewStorage(&log)
 	cbConn := cbconnector.NewCBConnector(&log, conf.CashbackAddr)
-	controller := controllers.NewGmartController(&log, conf, store, dbConn, cbConn)
+	stat := storage.NewCurrentStats()
+	controller := controllers.NewGmartController(&log, conf, store, dbConn, cbConn, stat)
 	tickCheckTokens := time.NewTicker(1 * time.Hour)
 	tickCheckCashback := time.NewTicker(1 * time.Second)
+	tickCheckStats := time.NewTicker(1 * time.Hour)
 	go func() {
 		defer runtime.Goexit()
 		for {
@@ -43,12 +45,19 @@ func main() {
 	go func() {
 		defer runtime.Goexit()
 		for {
+			<-tickCheckStats.C
+			controller.CheckStatus()
+		}
+	}()
+	go func() {
+		defer runtime.Goexit()
+		for {
 			<-tickCheckCashback.C
 			orders, err := controller.PGConn.GetOrdersToCheck()
 			if err != nil {
 				log.Error().Err(err).Msg("error when get orders to update")
 			}
-			err = controller.Cashback.CheckOrders(orders, controller.PGConn.UpdateOrder)
+			err = controller.Cashback.CheckOrders(orders, controller.PGConn.UpdateOrder, controller.PGConn.RegisterBonusChange)
 			if err != nil {
 				log.Error().Err(err).Msg("error when check orders")
 			}

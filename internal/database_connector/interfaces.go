@@ -14,7 +14,7 @@ type DBConnector interface {
 	AddUserBalance(userLogin string, sum float64) (int64, error)
 	RegisterOrder(orderID string, accrual float64, placedAt string, login string) (int64, error)
 	UpdateOrder(orderID string, accrual float64, status string) (int64, error)
-	RegisterWithdraw(orderID string, sum float64, placedAt string, login string) (int64, error)
+	RegisterBonusChange(orderID string, sum float64, placedAt string, login string, sub bool) (int64, error)
 	RegisterUser(login string, password string) (int64, error)
 	CheckUserCreds(login string, plainPassword string) (bool, error)
 	GetOrdersToCheck() ([]storage.Order, error)

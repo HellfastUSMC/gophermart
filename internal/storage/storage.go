@@ -61,17 +61,14 @@ type Withdraw struct {
 	Login       string  `json:"-"`
 }
 
-//type CurrentStats struct {
-//	DBConn       bool `json:"db_conn"`
-//	CashbackServ bool `json:"cashback_serv"`
-//}
+type CurrentStats struct {
+	DBConn       bool `json:"db_conn"`
+	CashbackServ bool `json:"cashback_serv"`
+}
 
-//func NewCurrentStats() *CurrentStats {
-//	return &CurrentStats{
-//		LastUserID:   0,
-//		LastOrderID:  0,
-//		LastItemID:   0,
-//		DBConn:       false,
-//		CashbackServ: false,
-//	}
-//}
+func NewCurrentStats() *CurrentStats {
+	return &CurrentStats{
+		DBConn:       false,
+		CashbackServ: false,
+	}
+}
