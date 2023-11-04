@@ -1,4 +1,4 @@
-package interfaces
+package cbconnector
 
 import "github.com/HellfastUSMC/gophermart/internal/storage"
 

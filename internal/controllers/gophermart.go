@@ -5,15 +5,16 @@ import (
 	"crypto/sha256"
 	"encoding/json"
 	"fmt"
-	cbConnector "github.com/HellfastUSMC/gophermart/internal/cashback_connector"
-	dbConnector "github.com/HellfastUSMC/gophermart/internal/database_connector"
 	"io"
 	"math/rand"
 	"net/http"
 	"strings"
 	"time"
 
-	"github.com/HellfastUSMC/gophermart/internal/interfaces"
+	"github.com/HellfastUSMC/gophermart/internal/cashback_connector"
+	"github.com/HellfastUSMC/gophermart/internal/config"
+	"github.com/HellfastUSMC/gophermart/internal/database_connector"
+	"github.com/HellfastUSMC/gophermart/internal/logger"
 	"github.com/HellfastUSMC/gophermart/internal/middlewares"
 	"github.com/HellfastUSMC/gophermart/internal/storage"
 	"github.com/ShiraazMoollatjie/goluhn"
@@ -22,11 +23,11 @@ import (
 )
 
 type GmartController struct {
-	Logger   interfaces.Logger
-	Config   interfaces.Configurator
+	Logger   logger.Logger
+	Config   config.Configurator
 	Storage  *storage.Storage
-	Cashback interfaces.Cashback
-	PGConn   interfaces.DBConnector
+	Cashback cbconnector.Cashback
+	PGConn   dbconnector.DBConnector
 }
 
 func (c *GmartController) Route() *chi.Mux {
@@ -527,7 +528,7 @@ func (c *GmartController) CheckAuth(login string, password string) (bool, error)
 	return exists, nil
 }
 
-func NewGmartController(logger interfaces.Logger, conf interfaces.Configurator, storage *storage.Storage, pgConn *dbConnector.PGSQLConn, cbConnector *cbConnector.CBConnector) *GmartController {
+func NewGmartController(logger logger.Logger, conf config.Configurator, storage *storage.Storage, pgConn *dbconnector.PGSQLConn, cbConnector *cbconnector.CBConnector) *GmartController {
 	return &GmartController{
 		Logger:   logger,
 		Config:   conf,

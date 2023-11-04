@@ -3,12 +3,12 @@ package storage
 import (
 	"time"
 
-	"github.com/HellfastUSMC/gophermart/internal/interfaces"
+	"github.com/HellfastUSMC/gophermart/internal/logger"
 )
 
 type Storage struct {
 	//Status *CurrentStats
-	Logger interfaces.Logger
+	Logger logger.Logger
 	Tokens map[string]Token
 	Orders map[int64]Order
 }
@@ -19,7 +19,7 @@ type Token struct {
 	Token   string
 }
 
-func NewStorage(Logger interfaces.Logger) *Storage {
+func NewStorage(Logger logger.Logger) *Storage {
 	return &Storage{
 		//Status: Status,
 		Logger: Logger,

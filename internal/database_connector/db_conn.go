@@ -1,4 +1,4 @@
-package dbConnector
+package dbconnector
 
 import (
 	"context"
@@ -9,7 +9,7 @@ import (
 	"net"
 	"time"
 
-	"github.com/HellfastUSMC/gophermart/internal/interfaces"
+	"github.com/HellfastUSMC/gophermart/internal/logger"
 	"github.com/HellfastUSMC/gophermart/internal/storage"
 	_ "github.com/jackc/pgx/v5/stdlib"
 	"github.com/pressly/goose/v3"
@@ -22,7 +22,7 @@ var embedMigrations embed.FS
 type PGSQLConn struct {
 	ConnectionString string
 	DBConn           *sql.DB
-	Logger           interfaces.Logger
+	Logger           logger.Logger
 }
 
 func (pg *PGSQLConn) Close() error {
@@ -366,7 +366,7 @@ func (pg *PGSQLConn) GetOrdersToCheck() ([]storage.Order, error) {
 	return orders, nil
 }
 
-func NewConnectionPGSQL(connPath string, logger interfaces.Logger) (*PGSQLConn, error) {
+func NewConnectionPGSQL(connPath string, logger logger.Logger) (*PGSQLConn, error) {
 	db, err := sql.Open("pgx", connPath)
 	if err != nil {
 		return nil, err

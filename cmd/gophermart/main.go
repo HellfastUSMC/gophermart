@@ -23,13 +23,13 @@ func main() {
 		log.Error().Err(err).Msg("config create error")
 	}
 	//currentStats := storage.NewCurrentStats()
-	dbConn, err := dbConnector.NewConnectionPGSQL(conf.DBConnString, &log)
+	dbConn, err := dbconnector.NewConnectionPGSQL(conf.DBConnString, &log)
 	if err != nil {
 		log.Error().Err(err).Msg("DB connection error")
 		return
 	}
 	store := storage.NewStorage(&log)
-	cbConn := cbConnector.NewCBConnector(&log, conf.CashbackAddr)
+	cbConn := cbconnector.NewCBConnector(&log, conf.CashbackAddr)
 	controller := controllers.NewGmartController(&log, conf, store, dbConn, cbConn)
 	tickCheckTokens := time.NewTicker(1 * time.Hour)
 	tickCheckCashback := time.NewTicker(1 * time.Second)

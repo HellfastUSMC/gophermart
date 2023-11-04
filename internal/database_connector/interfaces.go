@@ -1,4 +1,4 @@
-package interfaces
+package dbconnector
 
 import "github.com/HellfastUSMC/gophermart/internal/storage"
 

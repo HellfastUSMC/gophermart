@@ -1,20 +1,20 @@
-package cbConnector
+package cbconnector
 
 import (
 	"context"
 	"encoding/json"
 	"fmt"
-	"github.com/HellfastUSMC/gophermart/internal/interfaces"
 	"io"
 	"net/http"
 	"time"
 
+	"github.com/HellfastUSMC/gophermart/internal/logger"
 	"github.com/HellfastUSMC/gophermart/internal/storage"
 )
 
 type CBConnector struct {
 	CBPath string
-	Logger interfaces.Logger
+	Logger logger.Logger
 }
 
 func (c *CBConnector) CheckOrders(orders []storage.Order, updateOrderFunc func(id string, accrual float64, status string) (int64, error)) error {
@@ -72,7 +72,7 @@ func (c *CBConnector) CheckOrders(orders []storage.Order, updateOrderFunc func(i
 	return nil
 }
 
-func NewCBConnector(logger interfaces.Logger, CBPath string) *CBConnector {
+func NewCBConnector(logger logger.Logger, CBPath string) *CBConnector {
 	return &CBConnector{
 		CBPath: CBPath,
 		Logger: logger,

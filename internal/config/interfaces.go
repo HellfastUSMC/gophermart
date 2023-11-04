@@ -1,4 +1,4 @@
-package interfaces
+package config
 
 type Configurator interface {
 	ParseStartupFlags() error
