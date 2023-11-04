@@ -1,7 +1,7 @@
 -- +goose Up
 CREATE TABLE IF NOT EXISTS BONUSES (
             ID serial NOT NULL UNIQUE PRIMARY KEY,
-            ORDER_ID BIGINT NOT NULL UNIQUE,
+            ORDER_ID varchar NOT NULL UNIQUE,
     		SUM double precision NOT NULL,
     		PLACED_AT text NOT NULL,
             LOGIN varchar NOT NULL
