@@ -9,7 +9,36 @@ import (
 type Storage struct {
 	Logger logger.Logger
 	Tokens map[string]Token
-	Orders map[int64]Order
+	Connector
+}
+
+type Connector interface {
+	Close() error
+	Ping() error
+	UserOps
+	OrderOps
+	BonusOps
+}
+
+type UserOps interface {
+	RegisterUser(login string, password string) (int64, error)
+	CheckUserCreds(login string, plainPassword string) (bool, error)
+	//GetUserBalance(login string) (float64, float64, error)
+	CheckUserBalance(userLogin string) (float64, float64, error)
+	UpdateUserBalance(checkUserBalance func(string) (float64, float64, error), userLogin string, sum float64, sub bool) (int64, error)
+}
+
+type OrderOps interface {
+	GetUserOrders(login string) ([]Order, error)
+	UpdateOrder(orderID string, accrual float64, status string) (int64, error)
+	RegisterOrder(orderID string, accrual float64, placedAt string, login string) (int64, error)
+	GetOrder(order string) (Order, error)
+	GetOrdersToCheck() ([]Order, error)
+}
+
+type BonusOps interface {
+	GetUserWithdrawals(login string) ([]Bonus, error)
+	RegisterBonusChange(orderID string, sum float64, placedAt string, login string, sub bool) (int64, error)
 }
 
 type Token struct {
@@ -18,10 +47,11 @@ type Token struct {
 	Token   string
 }
 
-func NewStorage(Logger logger.Logger) *Storage {
+func NewStorage(Logger logger.Logger, connector Connector) *Storage {
 	return &Storage{
-		Logger: Logger,
-		Tokens: make(map[string]Token),
+		Logger:    Logger,
+		Tokens:    make(map[string]Token),
+		Connector: connector,
 	}
 }
 

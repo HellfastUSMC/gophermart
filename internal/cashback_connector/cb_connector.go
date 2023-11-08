@@ -79,13 +79,13 @@ func (c *CBConnector) CheckOrders(
 		}
 		if statusCode == http.StatusOK {
 			_, err = updateOrderFunc(val.ID, order.Accrual, order.Status)
-			c.Logger.Info().Msg(fmt.Sprintf("order %s updated with status %s", order.ID, order.Status))
+			c.Logger.Info().Msg(fmt.Sprintf("order %s updated with status %s", val.ID, order.Status))
 			if err != nil {
 				c.Logger.Error().Err(err).Msg("cannot update order to DB")
 				return err
 			}
 			if order.Status == "PROCESSED" {
-				_, err = registerBonusChange(order.ID, order.Accrual, order.Date, order.Login, false)
+				_, err = registerBonusChange(val.ID, order.Accrual, val.Date, val.Login, false)
 				if err != nil {
 					c.Logger.Error().Err(err).Msg("cannot update bonuses to DB")
 					return err

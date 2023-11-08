@@ -22,18 +22,18 @@ func main() {
 	if err != nil {
 		log.Error().Err(err).Msg("config create error")
 	}
-	dbConn, err := dbconnector.NewConnectionPGSQL(conf.DBConnString, &log)
+	conn, err := dbconnector.NewConnectionSQL(conf.DBConnString, &log)
 	if err != nil {
 		log.Error().Err(err).Msg("DB connection error")
 		return
 	}
-	store := storage.NewStorage(&log)
+	store := storage.NewStorage(&log, conn)
 	cbConn := cbconnector.NewCBConnector(&log, conf.CashbackAddr)
 	stat := storage.NewCurrentStats()
-	controller := controllers.NewGmartController(&log, conf, store, dbConn, cbConn, stat)
-	tickCheckTokens := time.NewTicker(1 * time.Hour)
-	tickCheckCashback := time.NewTicker(1 * time.Second)
-	tickCheckStats := time.NewTicker(1 * time.Hour)
+	controller := controllers.NewGmartController(&log, conf, store, cbConn, stat)
+	tickCheckTokens := time.NewTicker(time.Duration(conf.TokensInterval) * time.Hour)
+	tickCheckCashback := time.NewTicker(time.Duration(conf.OrdersInterval) * time.Second)
+	tickCheckStats := time.NewTicker(time.Duration(conf.HealthInterval) * time.Hour)
 	go func() {
 		defer runtime.Goexit()
 		for {
@@ -52,11 +52,11 @@ func main() {
 		defer runtime.Goexit()
 		for {
 			<-tickCheckCashback.C
-			orders, err := controller.PGConn.GetOrdersToCheck()
+			orders, err := controller.Storage.GetOrdersToCheck()
 			if err != nil {
 				log.Error().Err(err).Msg("error when get orders to update")
 			}
-			err = controller.Cashback.CheckOrders(orders, controller.PGConn.UpdateOrder, controller.PGConn.RegisterBonusChange)
+			err = controller.Cashback.CheckOrders(orders, controller.Storage.UpdateOrder, controller.Storage.RegisterBonusChange)
 			if err != nil {
 				log.Error().Err(err).Msg("error when check orders")
 			}

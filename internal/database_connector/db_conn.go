@@ -19,13 +19,29 @@ import (
 //go:embed migrations/*.sql
 var embedMigrations embed.FS
 
-type PGSQLConn struct {
+type SQLConn struct {
 	ConnectionString string
 	DBConn           *sql.DB
 	Logger           logger.Logger
+	SQLUserOps
+	SQLOrderOps
+	SQLBonusOps
 }
 
-func (pg *PGSQLConn) Close() error {
+type SQLUserOps struct {
+	Logger logger.Logger
+	DBConn *sql.DB
+}
+type SQLOrderOps struct {
+	Logger logger.Logger
+	DBConn *sql.DB
+}
+type SQLBonusOps struct {
+	Logger logger.Logger
+	DBConn *sql.DB
+}
+
+func (pg *SQLConn) Close() error {
 	err := pg.DBConn.Close()
 	if err != nil {
 		return err
@@ -33,10 +49,10 @@ func (pg *PGSQLConn) Close() error {
 	return nil
 }
 
-func (pg *PGSQLConn) makeQueryContext(query string, args ...any) (*sql.Rows, context.CancelFunc, error) {
+func makeQueryContext(dbConn *sql.DB, query string, args ...any) (*sql.Rows, context.CancelFunc, error) {
 	ctx, cancel := context.WithTimeout(context.Background(), time.Second*60)
 	f := func() (*sql.Rows, error) {
-		rows, err := pg.DBConn.QueryContext(ctx, query, args...)
+		rows, err := dbConn.QueryContext(ctx, query, args...)
 		if err != nil {
 			return nil, err
 		}
@@ -50,36 +66,36 @@ func (pg *PGSQLConn) makeQueryContext(query string, args ...any) (*sql.Rows, con
 	return rows, cancel, nil
 }
 
-func (pg *PGSQLConn) makeExecContext(query string, args ...any) (int64, context.CancelFunc, error) {
+func makeExecContext(dbConn *sql.DB, logger logger.Logger, query string, args ...any) (int64, context.CancelFunc, error) {
 	ctx, cancel := context.WithTimeout(context.Background(), time.Second*30)
-	res, err := pg.DBConn.ExecContext(ctx, query, args...)
+	res, err := dbConn.ExecContext(ctx, query, args...)
 	if err != nil {
-		pg.Logger.Error().Err(err).Msg("error when query from DB")
+		logger.Error().Err(err).Msg("error when query from DB")
 		return 0, cancel, err
 	}
 	rows, err := res.RowsAffected()
 	if err != nil {
-		pg.Logger.Error().Err(err).Msg("error when get rows affected")
+		logger.Error().Err(err).Msg("error when get rows affected")
 		return 0, cancel, err
 	}
 	return rows, cancel, nil
 }
 
-func (pg *PGSQLConn) GetUserBalance(login string) (float64, float64, error) {
-	row, cancel := pg.makeQueryRowCTX("SELECT cashback, withdrawn FROM USERS WHERE login=$1", login)
-	defer cancel()
-	var balance float64
-	var withdrawn float64
-	err := row.Scan(&balance, &withdrawn)
-	if err != nil {
-		pg.Logger.Error().Err(err).Msg("error when scanning rows")
-		return 0, 0, err
-	}
-	return balance, withdrawn, nil
-}
+//func (pg *SQLUserOps) GetUserBalance(login string) (float64, float64, error) {
+//	balance, cancel := makeQueryRowCTX(pg.DBConn, "SELECT cashback FROM USERS WHERE login=$1", login)
+//	defer cancel()
+//	var balance float64
+//	var withdrawn float64
+//	err := row.Scan(&balance, &withdrawn)
+//	if err != nil {
+//		pg.Logger.Error().Err(err).Msg("error when scanning rows")
+//		return 0, 0, err
+//	}
+//	return balance, withdrawn, nil
+//}
 
-func (pg *PGSQLConn) GetUserWithdrawals(login string) ([]storage.Bonus, error) {
-	rows, cancel, err := pg.makeQueryContext("SELECT id,order_id,sum,placed_at,login FROM BONUSES WHERE login=$1 AND sub=true ORDER BY placed_at", login)
+func (pg *SQLConn) GetUserWithdrawals(login string) ([]storage.Bonus, error) {
+	rows, cancel, err := makeQueryContext(pg.DBConn, "SELECT id,order_id,sum,placed_at,login FROM BONUSES WHERE login=$1 AND sub=true ORDER BY placed_at", login)
 	if err != nil {
 		pg.Logger.Error().Err(err).Msg("error when query user withdraws from DB")
 		return nil, err
@@ -112,14 +128,14 @@ func (pg *PGSQLConn) GetUserWithdrawals(login string) ([]storage.Bonus, error) {
 	return withdrawals, nil
 }
 
-func (pg *PGSQLConn) makeQueryRowCTX(query string, args ...any) (*sql.Row, context.CancelFunc) {
+func makeQueryRowCTX(dbConn *sql.DB, query string, args ...any) (*sql.Row, context.CancelFunc) {
 	ctx, cancel := context.WithTimeout(context.Background(), time.Second*30)
-	row := pg.DBConn.QueryRowContext(ctx, query, args...)
+	row := dbConn.QueryRowContext(ctx, query, args...)
 	return row, cancel
 }
 
-func (pg *PGSQLConn) GetOrder(order string) (storage.Order, error) {
-	row, cancel := pg.makeQueryRowCTX("SELECT * FROM ORDERS WHERE id=$1", order)
+func (pg *SQLConn) GetOrder(order string) (storage.Order, error) {
+	row, cancel := makeQueryRowCTX(pg.DBConn, "SELECT * FROM ORDERS WHERE id=$1", order)
 	defer cancel()
 	var ord storage.Order
 	err := row.Scan(&ord.ID, &ord.Accrual, &ord.Date, &ord.Login, &ord.Status)
@@ -130,8 +146,8 @@ func (pg *PGSQLConn) GetOrder(order string) (storage.Order, error) {
 	return ord, nil
 }
 
-func (pg *PGSQLConn) GetUserOrders(login string) ([]storage.Order, error) {
-	rows, cancel, err := pg.makeQueryContext("SELECT * FROM ORDERS WHERE login=$1 ORDER BY placed_at", login)
+func (pg *SQLOrderOps) GetUserOrders(login string) ([]storage.Order, error) {
+	rows, cancel, err := makeQueryContext(pg.DBConn, "SELECT * FROM ORDERS WHERE login=$1 ORDER BY placed_at", login)
 	if err != nil {
 		pg.Logger.Error().Err(err).Msg("error when searching user orders in DB")
 		return nil, err
@@ -162,7 +178,7 @@ func (pg *PGSQLConn) GetUserOrders(login string) ([]storage.Order, error) {
 	return orders, nil
 }
 
-func (pg *PGSQLConn) Ping() error {
+func (pg *SQLConn) Ping() error {
 	ctx, cancel := context.WithTimeout(context.Background(), time.Second*10)
 	defer cancel()
 	f := func() error {
@@ -235,26 +251,45 @@ func retryWriteFunc(
 	return nil
 }
 
-func (pg *PGSQLConn) CheckUserBalance(userLogin string) (float64, float64, error) {
-	row, cancel := pg.makeQueryRowCTX("SELECT cashback, withdrawn FROM USERS WHERE login=$1", userLogin)
-	defer cancel()
+func (pg *SQLUserOps) CheckUserBalance(userLogin string) (float64, float64, error) {
+	current, cancel1 := makeQueryRowCTX(pg.DBConn, "SELECT cashback FROM USERS WHERE login=$1", userLogin)
+	defer cancel1()
+	withdrawn, cancel2 := makeQueryRowCTX(pg.DBConn, "SELECT SUM(SUM) FROM BONUSES WHERE login=$1 AND sub=true", userLogin)
+	defer cancel2()
 	bal := storage.Balance{}
-	err := row.Scan(&bal.Current, &bal.Withdrawn)
+	err := current.Scan(&bal.Current)
+	if err != nil {
+		return 0, 0, err
+	}
+	err = withdrawn.Scan(&bal.Withdrawn)
 	if err != nil {
 		return 0, 0, err
 	}
 	return bal.Current, bal.Withdrawn, nil
 }
 
-func (pg *PGSQLConn) SubUserBalance(userLogin string, sum float64) (int64, error) {
-	current, _, err := pg.CheckUserBalance(userLogin)
-	if err != nil {
-		return 0, err
+func (pg *SQLUserOps) UpdateUserBalance(checkUserBalance func(string) (float64, float64, error), userLogin string, sum float64, sub bool) (int64, error) {
+	if sub {
+		current, _, err := checkUserBalance(userLogin)
+		if err != nil {
+			return 0, err
+		}
+		if current < sum {
+			return 0, fmt.Errorf("can't substract from balance, current=%f < order=%f", current, sum)
+		}
+		rows, cancel, err := makeExecContext(pg.DBConn, pg.Logger, "UPDATE USERS SET cashback=cashback-$1 WHERE login=$2",
+			sum, userLogin,
+		)
+		defer cancel()
+		if err != nil {
+			return 0, err
+		}
+		return rows, nil
 	}
-	if current < sum {
-		return 0, fmt.Errorf("can't substract from balance, current=%f < order=%f", current, sum)
-	}
-	rows, cancel, err := pg.makeExecContext("UPDATE USERS SET cashback=cashback-$1, withdrawn=withdrawn+$1 WHERE login=$2",
+	rows, cancel, err := makeExecContext(
+		pg.DBConn,
+		pg.Logger,
+		"UPDATE USERS SET cashback=cashback+$1 WHERE login=$2",
 		sum, userLogin,
 	)
 	defer cancel()
@@ -264,20 +299,10 @@ func (pg *PGSQLConn) SubUserBalance(userLogin string, sum float64) (int64, error
 	return rows, nil
 }
 
-func (pg *PGSQLConn) AddUserBalance(userLogin string, sum float64) (int64, error) {
-	rows, cancel, err := pg.makeExecContext(
-		"UPDATE USERS SET cashback=cashback+$1, cashback_all=cashback+$1 WHERE login=$2",
-		sum, userLogin,
-	)
-	defer cancel()
-	if err != nil {
-		return 0, err
-	}
-	return rows, nil
-}
-
-func (pg *PGSQLConn) RegisterOrder(orderID string, accrual float64, placedAt string, login string) (int64, error) {
-	rows, cancel, err := pg.makeExecContext(
+func (pg *SQLOrderOps) RegisterOrder(orderID string, accrual float64, placedAt string, login string) (int64, error) {
+	rows, cancel, err := makeExecContext(
+		pg.DBConn,
+		pg.Logger,
 		"INSERT INTO ORDERS (id,cashback,placed_at,login,status) VALUES ($1,$2,$3,$4,$5)",
 		orderID, accrual, placedAt, login, "NEW",
 	)
@@ -288,8 +313,10 @@ func (pg *PGSQLConn) RegisterOrder(orderID string, accrual float64, placedAt str
 	return rows, nil
 }
 
-func (pg *PGSQLConn) UpdateOrder(orderID string, accrual float64, status string) (int64, error) {
-	rows, cancel, err := pg.makeExecContext(
+func (pg *SQLOrderOps) UpdateOrder(orderID string, accrual float64, status string) (int64, error) {
+	rows, cancel, err := makeExecContext(
+		pg.DBConn,
+		pg.Logger,
 		"UPDATE ORDERS SET cashback=$1, status=$3 WHERE id=$2",
 		accrual, orderID, status,
 	)
@@ -300,8 +327,10 @@ func (pg *PGSQLConn) UpdateOrder(orderID string, accrual float64, status string)
 	return rows, nil
 }
 
-func (pg *PGSQLConn) RegisterBonusChange(orderID string, sum float64, placedAt string, login string, sub bool) (int64, error) {
-	rows, cancel, err := pg.makeExecContext(
+func (pg *SQLBonusOps) RegisterBonusChange(orderID string, sum float64, placedAt string, login string, sub bool) (int64, error) {
+	rows, cancel, err := makeExecContext(
+		pg.DBConn,
+		pg.Logger,
 		"INSERT INTO BONUSES (order_id, sum ,placed_at, login, sub) VALUES ($1,$2,$3,$4,$5)",
 		orderID, sum, placedAt, login, sub,
 	)
@@ -312,14 +341,16 @@ func (pg *PGSQLConn) RegisterBonusChange(orderID string, sum float64, placedAt s
 	return rows, nil
 }
 
-func (pg *PGSQLConn) RegisterUser(login string, password string) (int64, error) {
+func (pg *SQLUserOps) RegisterUser(login string, password string) (int64, error) {
 	hashedPass, err := storage.PasswordHasher(password)
 	if err != nil {
 		return 0, err
 	}
-	rows, cancel, err := pg.makeExecContext(
-		"INSERT INTO USERS (login,password,cashback,cashback_all,withdrawn) VALUES ($1,$2,$3,$4,$5)",
-		login, string(hashedPass), 0, 0, 0,
+	rows, cancel, err := makeExecContext(
+		pg.DBConn,
+		pg.Logger,
+		"INSERT INTO USERS (login,password,cashback) VALUES ($1,$2,$3)",
+		login, string(hashedPass), 0,
 	)
 	defer cancel()
 	if err != nil {
@@ -328,8 +359,12 @@ func (pg *PGSQLConn) RegisterUser(login string, password string) (int64, error) 
 	return rows, nil
 }
 
-func (pg *PGSQLConn) CheckUserCreds(login string, plainPassword string) (bool, error) {
-	row, cancel := pg.makeQueryRowCTX("SELECT password FROM USERS WHERE LOGIN=$1", login)
+func (pg *SQLUserOps) CheckUserCreds(login string, plainPassword string) (bool, error) {
+	row, cancel := makeQueryRowCTX(
+		pg.DBConn,
+		"SELECT password FROM USERS WHERE LOGIN=$1",
+		login,
+	)
 	defer cancel()
 	var userHashedPwd string
 	err := row.Scan(&userHashedPwd)
@@ -345,8 +380,11 @@ func (pg *PGSQLConn) CheckUserCreds(login string, plainPassword string) (bool, e
 	return true, nil
 }
 
-func (pg *PGSQLConn) GetOrdersToCheck() ([]storage.Order, error) {
-	rows, cancel, err := pg.makeQueryContext("SELECT * FROM orders WHERE status!='INVALID' AND status!='PROCESSED'")
+func (pg *SQLOrderOps) GetOrdersToCheck() ([]storage.Order, error) {
+	rows, cancel, err := makeQueryContext(
+		pg.DBConn,
+		"SELECT * FROM orders WHERE status!='INVALID' AND status!='PROCESSED'",
+	)
 	defer cancel()
 	if err != nil {
 		return nil, err
@@ -366,7 +404,7 @@ func (pg *PGSQLConn) GetOrdersToCheck() ([]storage.Order, error) {
 	return orders, nil
 }
 
-func NewConnectionPGSQL(connPath string, logger logger.Logger) (*PGSQLConn, error) {
+func NewConnectionSQL(connPath string, logger logger.Logger) (*SQLConn, error) {
 	db, err := sql.Open("pgx", connPath)
 	if err != nil {
 		return nil, err
@@ -378,9 +416,24 @@ func NewConnectionPGSQL(connPath string, logger logger.Logger) (*PGSQLConn, erro
 	if err := goose.Up(db, "migrations"); err != nil {
 		return nil, err
 	}
-	return &PGSQLConn{
-		ConnectionString: connPath,
-		DBConn:           db,
-		Logger:           logger,
+	user := SQLUserOps{
+		DBConn: db,
+		Logger: logger,
+	}
+	order := SQLOrderOps{
+		DBConn: db,
+		Logger: logger,
+	}
+	bonus := SQLBonusOps{
+		DBConn: db,
+		Logger: logger,
+	}
+	return &SQLConn{
+		connPath,
+		db,
+		logger,
+		user,
+		order,
+		bonus,
 	}, nil
 }

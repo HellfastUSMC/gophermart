@@ -12,7 +12,6 @@ import (
 
 	"github.com/HellfastUSMC/gophermart/internal/cashback_connector"
 	"github.com/HellfastUSMC/gophermart/internal/config"
-	"github.com/HellfastUSMC/gophermart/internal/database_connector"
 	"github.com/HellfastUSMC/gophermart/internal/logger"
 	"github.com/HellfastUSMC/gophermart/internal/middlewares"
 	"github.com/HellfastUSMC/gophermart/internal/storage"
@@ -25,7 +24,6 @@ type GmartController struct {
 	Config   config.Configurator
 	Storage  *storage.Storage
 	Cashback cbconnector.Cashback
-	PGConn   dbconnector.DBConnector
 	Status   *storage.CurrentStats
 }
 
@@ -87,13 +85,13 @@ func (c *GmartController) withdrawFromBalance(res http.ResponseWriter, req *http
 			break
 		}
 	}
-	_, err = c.PGConn.RegisterBonusChange(withdraw.OrderID, withdraw.Sum, withdraw.ProcessedAt, withdraw.Login, true)
+	_, err = c.Storage.Connector.RegisterBonusChange(withdraw.OrderID, withdraw.Sum, withdraw.ProcessedAt, withdraw.Login, true)
 	if err != nil {
 		c.Logger.Error().Err(err).Msg("cannot register withdraw")
 		http.Error(res, "cannot register withdraw", http.StatusInternalServerError)
 		return
 	}
-	_, err = c.PGConn.SubUserBalance(withdraw.Login, withdraw.Sum)
+	_, err = c.Storage.Connector.UpdateUserBalance(c.Storage.CheckUserBalance, withdraw.Login, withdraw.Sum, true)
 	if err != nil {
 		c.Logger.Error().Err(err).Msg("cannot sub user balance")
 		http.Error(res, "cannot sub user balance", http.StatusInternalServerError)
@@ -131,10 +129,10 @@ func (c *GmartController) postOrder(res http.ResponseWriter, req *http.Request) 
 		http.Error(res, "wrong order number", http.StatusUnprocessableEntity)
 		return
 	}
-	_, err = c.PGConn.RegisterOrder(orderID, 0, time.Now().Format(time.RFC3339), login)
+	_, err = c.Storage.Connector.RegisterOrder(orderID, 0, time.Now().Format(time.RFC3339), login)
 	if err != nil {
 		if strings.Contains(err.Error(), "23505") {
-			order, err := c.PGConn.GetOrder(orderID)
+			order, err := c.Storage.Connector.GetOrder(orderID)
 			if err != nil {
 				c.Logger.Error().Err(err).Msg("error when searching for order in DB")
 				http.Error(res, "error when searching for order in DB", http.StatusInternalServerError)
@@ -169,13 +167,13 @@ func (c *GmartController) postOrder(res http.ResponseWriter, req *http.Request) 
 		return
 	}
 	if order.Status == "PROCESSED" {
-		_, err = c.PGConn.UpdateOrder(order.ID, order.Accrual, order.Status)
+		_, err = c.Storage.Connector.UpdateOrder(order.ID, order.Accrual, order.Status)
 		if err != nil {
 			c.Logger.Error().Msg("error in update order in DB")
 			http.Error(res, "error in update order in DB", http.StatusInternalServerError)
 			return
 		}
-		_, err = c.PGConn.AddUserBalance(login, order.Accrual)
+		_, err = c.Storage.Connector.UpdateUserBalance(c.Storage.CheckUserBalance, login, order.Accrual, false)
 		if err != nil {
 			c.Logger.Error().Msg("error in update user balance in DB")
 			http.Error(res, "error in update user balance in DB", http.StatusInternalServerError)
@@ -211,7 +209,7 @@ func (c *GmartController) loginUser(res http.ResponseWriter, req *http.Request) 
 		http.Error(res, "login or password missing in body", http.StatusInternalServerError)
 		return
 	}
-	auth, err := c.PGConn.CheckUserCreds(userCreds.Login, userCreds.Password)
+	auth, err := c.Storage.Connector.CheckUserCreds(userCreds.Login, userCreds.Password)
 	if err != nil {
 		c.Logger.Error().Err(err).Msg("cannot check provided credentials")
 		http.Error(res, "cannot check provided credentials", http.StatusInternalServerError)
@@ -268,7 +266,7 @@ func (c *GmartController) registerUser(res http.ResponseWriter, req *http.Reques
 		http.Error(res, "login or password missing in body", http.StatusInternalServerError)
 		return
 	}
-	_, err = c.PGConn.RegisterUser(userCreds.Login, userCreds.Password)
+	_, err = c.Storage.Connector.RegisterUser(userCreds.Login, userCreds.Password)
 	if err != nil {
 		c.Logger.Error().Err(err).Msg("cannot add user to DB")
 		http.Error(res, "cannot add user to DB", http.StatusInternalServerError)
@@ -309,7 +307,7 @@ func (c *GmartController) generateToken() (token string) {
 func (c *GmartController) getUserWithdrawals(res http.ResponseWriter, req *http.Request) {
 	token := req.Header.Get("Authorization")
 	login := c.findLoginByToken(token)
-	withdrawals, err := c.PGConn.GetUserWithdrawals(login)
+	withdrawals, err := c.Storage.Connector.GetUserWithdrawals(login)
 	if err != nil {
 		c.Logger.Error().Err(err).Msg("cannot get user withdrawals")
 		http.Error(res, "cannot get user withdrawals", http.StatusInternalServerError)
@@ -339,7 +337,7 @@ func (c *GmartController) getUserWithdrawals(res http.ResponseWriter, req *http.
 func (c *GmartController) getUserBalance(res http.ResponseWriter, req *http.Request) {
 	token := req.Header.Get("Authorization")
 	login := c.findLoginByToken(token)
-	balance, withdrawn, err := c.PGConn.GetUserBalance(login)
+	balance, withdrawn, err := c.Storage.Connector.CheckUserBalance(login)
 	if err != nil {
 		c.Logger.Error().Err(err).Msg("cannot get user balance")
 		http.Error(res, "cannot get user balance", http.StatusInternalServerError)
@@ -382,7 +380,7 @@ func (c *GmartController) getUserOrders(res http.ResponseWriter, req *http.Reque
 		http.Error(res, "cannot get user login", http.StatusInternalServerError)
 		return
 	}
-	orders, err := c.PGConn.GetUserOrders(login)
+	orders, err := c.Storage.Connector.GetUserOrders(login)
 	if orders == nil {
 		c.Logger.Error().Err(err).Msg("no orders found for this user")
 		http.Error(res, "no orders found for this user", http.StatusNoContent)
@@ -411,7 +409,7 @@ func (c *GmartController) getUserOrders(res http.ResponseWriter, req *http.Reque
 }
 
 func (c *GmartController) CheckStatus() {
-	if err := c.PGConn.Ping(); err != nil {
+	if err := c.Storage.Connector.Ping(); err != nil {
 		c.Status.DBConn = false
 	}
 	c.Status.DBConn = true
@@ -422,7 +420,7 @@ func (c *GmartController) CheckStatus() {
 }
 
 func (c *GmartController) CheckAuth(login string, password string) (bool, error) {
-	exists, err := c.PGConn.CheckUserCreds(login, password)
+	exists, err := c.Storage.Connector.CheckUserCreds(login, password)
 	if err != nil {
 		c.Logger.Error().Err(err).Msg("error in check user credentials")
 		return false, err
@@ -430,12 +428,11 @@ func (c *GmartController) CheckAuth(login string, password string) (bool, error)
 	return exists, nil
 }
 
-func NewGmartController(logger logger.Logger, conf config.Configurator, storage *storage.Storage, pgConn *dbconnector.PGSQLConn, cbConnector *cbconnector.CBConnector, status *storage.CurrentStats) *GmartController {
+func NewGmartController(logger logger.Logger, conf config.Configurator, storage *storage.Storage, cbConnector *cbconnector.CBConnector, status *storage.CurrentStats) *GmartController {
 	return &GmartController{
 		Logger:   logger,
 		Config:   conf,
 		Storage:  storage,
-		PGConn:   pgConn,
 		Cashback: cbConnector,
 		Status:   status,
 	}
