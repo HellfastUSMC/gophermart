@@ -256,16 +256,17 @@ func (pg *SQLUserOps) CheckUserBalance(userLogin string) (float64, float64, erro
 	defer cancel1()
 	withdrawn, cancel2 := makeQueryRowCTX(pg.DBConn, "SELECT SUM(SUM) FROM BONUSES WHERE login=$1 AND sub=true", userLogin)
 	defer cancel2()
-	bal := storage.Balance{}
-	err := current.Scan(&bal.Current)
+	var withdrawnDB sql.NullFloat64
+	var currentDB sql.NullFloat64
+	err := current.Scan(&currentDB)
 	if err != nil {
 		return 0, 0, err
 	}
-	err = withdrawn.Scan(&bal.Withdrawn)
+	err = withdrawn.Scan(&withdrawnDB)
 	if err != nil {
 		return 0, 0, err
 	}
-	return bal.Current, bal.Withdrawn, nil
+	return currentDB.Float64, withdrawnDB.Float64, nil
 }
 
 func (pg *SQLUserOps) UpdateUserBalance(checkUserBalance func(string) (float64, float64, error), userLogin string, sum float64, sub bool) (int64, error) {
