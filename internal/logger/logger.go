@@ -2,7 +2,7 @@ package logger
 
 import "github.com/rs/zerolog"
 
-type CLogger interface {
+type Logger interface {
 	Info() *zerolog.Event
 	Warn() *zerolog.Event
 	Error() *zerolog.Event

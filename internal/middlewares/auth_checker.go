@@ -9,7 +9,7 @@ import (
 	"github.com/HellfastUSMC/gophermart/internal/storage"
 )
 
-func CheckAuth(log logger.CLogger, tokens map[string]storage.Token) func(h http.Handler) http.Handler {
+func CheckAuth(log logger.Logger, tokens map[string]storage.Token) func(h http.Handler) http.Handler {
 	return func(h http.Handler) http.Handler {
 		return http.HandlerFunc(func(res http.ResponseWriter, req *http.Request) {
 			credentials := req.Header.Get("Authorization")

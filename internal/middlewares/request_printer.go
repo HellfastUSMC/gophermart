@@ -9,7 +9,7 @@ import (
 	"github.com/HellfastUSMC/gophermart/internal/logger"
 )
 
-func RequestPrinter(log logger.CLogger) func(h http.Handler) http.Handler {
+func RequestPrinter(log logger.Logger) func(h http.Handler) http.Handler {
 	return func(h http.Handler) http.Handler {
 		return http.HandlerFunc(func(res http.ResponseWriter, req *http.Request) {
 			body, err := io.ReadAll(req.Body)

@@ -7,11 +7,38 @@ import (
 )
 
 type Storage struct {
-	PGConn *PGSQLConn
-	Status *CurrentStats
-	Logger logger.CLogger
+	Logger logger.Logger
 	Tokens map[string]Token
-	Orders map[int64]Order
+	Connector
+}
+
+type Connector interface {
+	Close() error
+	Ping() error
+	UserOps
+	OrderOps
+	BonusOps
+}
+
+type UserOps interface {
+	RegisterUser(login string, password string) (int64, error)
+	CheckUserCreds(login string, plainPassword string) (bool, error)
+	//GetUserBalance(login string) (float64, float64, error)
+	CheckUserBalance(userLogin string) (float64, float64, error)
+	UpdateUserBalance(checkUserBalance func(string) (float64, float64, error), userLogin string, sum float64, sub bool) (int64, error)
+}
+
+type OrderOps interface {
+	GetUserOrders(login string) ([]Order, error)
+	UpdateOrder(orderID string, accrual float64, status string) (int64, error)
+	RegisterOrder(orderID string, accrual float64, placedAt string, login string) (int64, error)
+	GetOrder(order string) (Order, error)
+	GetOrdersToCheck() ([]Order, error)
+}
+
+type BonusOps interface {
+	GetUserWithdrawals(login string) ([]Bonus, error)
+	RegisterBonusChange(orderID string, sum float64, placedAt string, login string, sub bool) (int64, error)
 }
 
 type Token struct {
@@ -20,12 +47,11 @@ type Token struct {
 	Token   string
 }
 
-func NewStorage(PGConn *PGSQLConn, Status *CurrentStats, cLogger logger.CLogger) *Storage {
+func NewStorage(Logger logger.Logger, connector Connector) *Storage {
 	return &Storage{
-		PGConn: PGConn,
-		Status: Status,
-		Logger: cLogger,
-		Tokens: make(map[string]Token),
+		Logger:    Logger,
+		Tokens:    make(map[string]Token),
+		Connector: connector,
 	}
 }
 
@@ -42,20 +68,12 @@ type Order struct {
 	Login   string  `json:"-"`
 }
 
-type User struct {
-	ID              int64   `json:"id"`
-	Login           int64   `json:"phone"`
-	Password        string  `json:"-"`
-	Cashback        float64 `json:"cashback"`
-	AllTimeCashback float64 `json:"all_time_cashback"`
-}
-
 type Balance struct {
 	Current   float64 `json:"current"`
 	Withdrawn float64 `json:"withdrawn"`
 }
 
-type Withdraw struct {
+type Bonus struct {
 	ID          int64   `json:"-"`
 	OrderID     string  `json:"order"`
 	Sum         float64 `json:"sum"`
@@ -64,18 +82,12 @@ type Withdraw struct {
 }
 
 type CurrentStats struct {
-	LastOrderID  int64 `json:"last_order_id"`
-	LastUserID   int64 `json:"last_user_id"`
-	LastItemID   int64 `json:"last_item_id"`
-	DBConn       bool  `json:"db_conn"`
-	CashbackServ bool  `json:"cashback_serv"`
+	DBConn       bool `json:"db_conn"`
+	CashbackServ bool `json:"cashback_serv"`
 }
 
 func NewCurrentStats() *CurrentStats {
 	return &CurrentStats{
-		LastUserID:   0,
-		LastOrderID:  0,
-		LastItemID:   0,
 		DBConn:       false,
 		CashbackServ: false,
 	}
